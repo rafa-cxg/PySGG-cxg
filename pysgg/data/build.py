@@ -190,6 +190,7 @@ def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=Tr
                 pred_counter[each] += 1#计算的是每个rel出现累计次数
                 rel_obj_distribution[int(each)][relation_tuple[idx][0]]+=1
                 rel_obj_distribution[int(each)][relation_tuple[idx][1]] += 1
+                '''统计图片中出现的所有object'''
 
         with open(os.path.join(cfg.OUTPUT_DIR, "pred_counter.pkl"), 'wb') as f:
             pickle.dump(pred_counter, f)
