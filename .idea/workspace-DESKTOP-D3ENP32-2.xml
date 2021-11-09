@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="7b1edbd8-2891-439c-8585-926a99159d6b" name="Default Changelist" comment="" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="JupyterTrust" id="8a395acf-23a1-4ec4-933e-d3b95f307349" />
+  <component name="ProjectId" id="1ywlpPoOFIUCeNbr1mcz5W74sKn" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">
+    <property name="WebServerToolWindowFactoryState" value="true" />
+    <property name="WebServerToolWindowPanel.toolwindow.highlight.mappings" value="true" />
+    <property name="WebServerToolWindowPanel.toolwindow.highlight.symlinks" value="true" />
+    <property name="WebServerToolWindowPanel.toolwindow.show.date" value="false" />
+    <property name="WebServerToolWindowPanel.toolwindow.show.permissions" value="false" />
+    <property name="WebServerToolWindowPanel.toolwindow.show.size" value="false" />
+    <property name="node.js.detected.package.eslint" value="true" />
+    <property name="node.js.path.for.package.eslint" value="project" />
+    <property name="node.js.path.for.package.tslint" value="project" />
+    <property name="node.js.selected.package.eslint" value="(autodetect)" />
+    <property name="node.js.selected.package.tslint" value="(autodetect)" />
+    <property name="settings.editor.selected.configurable" value="com.jetbrains.python.configuration.PythonContentEntriesConfigurable" />
+  </component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\cps\PycharmProjects\PySGG-cxg\pysgg\modeling\roi_heads\two_stage_heads" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\cps\PycharmProjects\PySGG-cxg\checkpoints\predcls-BGNNPredictor" />
+      <recent name="C:\Users\cps\PycharmProjects\PySGG-cxg\pysgg\modeling\roi_heads" />
+    </key>
+  </component>
+  <component name="RunManager">
+    <configuration name="torch.distributed.launch" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="PySGG-cxg" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+        <env name="CUDA_VISIBLE_DEVICES" value="2,3" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="torch.distributed.launch" />
+      <option name="PARAMETERS" value="--master_port 10017 --nproc_per_node=2 tools/relation_train_net.py --config-file /root/PySGG-cxg/configs/e2e_relBGNN_vg.yaml DEBUG False SOLVER.IMS_PER_BATCH 2 TEST.IMS_PER_BATCH 2 DATALOADER.NUM_WORKERS 0 EXPERIMENT_NAME &quot;BGNN-10-2&quot; SOLVER.VAL_PERIOD 400 SOLVER.CHECKPOINT_PERIOD 400 MODEL.ROI_RELATION_HEAD.USE_GT_BOX True MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL True" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="true" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.torch.distributed.launch" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="7b1edbd8-2891-439c-8585-926a99159d6b" name="Default Changelist" comment="" />
+      <created>1635295592061</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1635295592061</updated>
+      <workItem from="1635295601588" duration="10152000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="WindowStateProjectService">
+    <state x="222" y="65" key="#com.intellij.execution.impl.EditConfigurationsDialog" timestamp="1635295671013">
+      <screen x="0" y="0" width="1536" height="824" />
+    </state>
+    <state x="222" y="65" key="#com.intellij.execution.impl.EditConfigurationsDialog/0.0.1536.824@0.0.1536.824" timestamp="1635295671013" />
+    <state width="1327" height="438" key="DebuggerActiveHint" timestamp="1635320436740">
+      <screen x="0" y="0" width="1536" height="824" />
+    </state>
+    <state width="1327" height="438" key="DebuggerActiveHint/0.0.1536.824@0.0.1536.824" timestamp="1635320436740" />
+    <state width="1481" height="329" key="GridCell.Tab.0.bottom" timestamp="1635320449437">
+      <screen x="0" y="0" width="1536" height="824" />
+    </state>
+    <state width="1481" height="329" key="GridCell.Tab.0.bottom/0.0.1536.824@0.0.1536.824" timestamp="1635320449437" />
+    <state width="1481" height="329" key="GridCell.Tab.0.center" timestamp="1635320449436">
+      <screen x="0" y="0" width="1536" height="824" />
+    </state>
+    <state width="1481" height="329" key="GridCell.Tab.0.center/0.0.1536.824@0.0.1536.824" timestamp="1635320449436" />
+    <state width="1481" height="329" key="GridCell.Tab.0.left" timestamp="1635320449436">
+      <screen x="0" y="0" width="1536" height="824" />
+    </state>
+    <state width="1481" height="329" key="GridCell.Tab.0.left/0.0.1536.824@0.0.1536.824" timestamp="1635320449436" />
+    <state width="1481" height="329" key="GridCell.Tab.0.right" timestamp="1635320449437">
+      <screen x="0" y="0" width="1536" height="824" />
+    </state>
+    <state width="1481" height="329" key="GridCell.Tab.0.right/0.0.1536.824@0.0.1536.824" timestamp="1635320449437" />
+    <state width="1481" height="329" key="GridCell.Tab.1.bottom" timestamp="1635319378462">
+      <screen x="0" y="0" width="1536" height="824" />
+    </state>
+    <state width="1481" height="329" key="GridCell.Tab.1.bottom/0.0.1536.824@0.0.1536.824" timestamp="1635319378462" />
+    <state width="1481" height="329" key="GridCell.Tab.1.center" timestamp="1635319378462">
+      <screen x="0" y="0" width="1536" height="824" />
+    </state>
+    <state width="1481" height="329" key="GridCell.Tab.1.center/0.0.1536.824@0.0.1536.824" timestamp="1635319378462" />
+    <state width="1481" height="329" key="GridCell.Tab.1.left" timestamp="1635319378462">
+      <screen x="0" y="0" width="1536" height="824" />
+    </state>
+    <state width="1481" height="329" key="GridCell.Tab.1.left/0.0.1536.824@0.0.1536.824" timestamp="1635319378462" />
+    <state width="1481" height="329" key="GridCell.Tab.1.right" timestamp="1635319378462">
+      <screen x="0" y="0" width="1536" height="824" />
+    </state>
+    <state width="1481" height="329" key="GridCell.Tab.1.right/0.0.1536.824@0.0.1536.824" timestamp="1635319378462" />
+    <state width="775" height="419" key="XDebugger.FullValuePopup" timestamp="1635320436728">
+      <screen x="0" y="0" width="1536" height="824" />
+    </state>
+    <state width="775" height="419" key="XDebugger.FullValuePopup/0.0.1536.824@0.0.1536.824" timestamp="1635320436728" />
+    <state x="380" y="201" key="com.intellij.xdebugger.impl.breakpoints.ui.BreakpointsDialogFactory$2" timestamp="1635299251724">
+      <screen x="0" y="0" width="1536" height="824" />
+    </state>
+    <state x="380" y="201" key="com.intellij.xdebugger.impl.breakpoints.ui.BreakpointsDialogFactory$2/0.0.1536.824@0.0.1536.824" timestamp="1635299251724" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/clustering/stastic_analyze.py</url>
+          <line>99</line>
+          <option name="timeStamp" value="3" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/clustering/stastic_analyze.py</url>
+          <line>120</line>
+          <option name="timeStamp" value="4" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/datasets/vg/HDF5-to-JSON-converter.py</url>
+          <line>27</line>
+          <option name="timeStamp" value="6" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/datasets/vg/HDF5-to-JSON-converter.py</url>
+          <line>128</line>
+          <option name="timeStamp" value="7" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/clustering/stastic_analyze.py</url>
+          <line>978</line>
+          <option name="timeStamp" value="9" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/roi_heads.py</url>
+          <line>35</line>
+          <option name="timeStamp" value="55" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/detector/generalized_rcnn.py</url>
+          <line>52</line>
+          <option name="timeStamp" value="56" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/data/build.py</url>
+          <line>207</line>
+          <option name="timeStamp" value="58" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/tools/relation_train_net.py</url>
+          <line>385</line>
+          <option name="timeStamp" value="69" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/roi_relation_predictors.py</url>
+          <line>673</line>
+          <option name="timeStamp" value="77" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/rel_proposal_network/models.py</url>
+          <line>679</line>
+          <option name="timeStamp" value="79" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/checkpoints/predcls-BGNNPredictor/fuck.py</url>
+          <line>23</line>
+          <option name="timeStamp" value="99" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/rel_proposal_network/models.py</url>
+          <line>760</line>
+          <option name="timeStamp" value="100" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/rel_proposal_network/models.py</url>
+          <line>765</line>
+          <option name="timeStamp" value="101" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/sampling.py</url>
+          <line>41</line>
+          <option name="timeStamp" value="103" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/two_stage_heads/two_stage_heads.py</url>
+          <line>239</line>
+          <option name="timeStamp" value="151" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/loss.py</url>
+          <line>220</line>
+          <option name="timeStamp" value="203" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/two_stage_heads/two_stage_heads.py</url>
+          <line>282</line>
+          <option name="timeStamp" value="208" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/two_stage_heads/two_stage_heads.py</url>
+          <line>220</line>
+          <option name="timeStamp" value="218" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/two_stage_heads/two_stage_heads.py</url>
+          <line>278</line>
+          <option name="timeStamp" value="219" />
+        </line-breakpoint>
+      </breakpoints>
+      <default-breakpoints>
+        <breakpoint type="python-exception">
+          <properties notifyOnTerminate="true" exception="BaseException">
+            <option name="notifyOnTerminate" value="true" />
+          </properties>
+        </breakpoint>
+      </default-breakpoints>
+    </breakpoint-manager>
+    <watches-manager>
+      <configuration name="PythonConfigurationType">
+        <watch expression="out2 * mask_mat" language="Python" />
+        <watch expression="(out1[idx]+out2)/2" language="Python" />
+        <watch expression="torch.log(F.softmax(input))" language="Python" />
+        <watch expression="logpt * self.alpha * (target &gt; 0).float()" language="Python" />
+        <watch expression="logpt*(target &lt;= 0).float()" language="Python" />
+      </configuration>
+    </watches-manager>
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/PySGG_cxg$HDF5_to_JSON_converter.coverage" NAME="HDF5-to-JSON-converter Coverage Results" MODIFIED="1633186299271" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/datasets/vg" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$stastic_analyze.coverage" NAME="stastic_analyze Coverage Results" MODIFIED="1633324653625" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$two_stage_predictors.coverage" NAME="two_stage_predictors Coverage Results" MODIFIED="1634536812226" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/pysgg/modeling/roi_heads/two_stage_heads" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$torch_distributed_launch.coverage" NAME="torch.distributed.launch Coverage Results" MODIFIED="1635304943128" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$fuck.coverage" NAME="fuck Coverage Results" MODIFIED="1634218056284" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/pysgg/data" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$relation_train_net.coverage" NAME="torch.distributed.launch Coverage Results" MODIFIED="1635256726436" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$fuck__1_.coverage" NAME="fuck (1) Coverage Results" MODIFIED="1634232866514" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/checkpoints/predcls-BGNNPredictor" />
+  </component>
+</project>
