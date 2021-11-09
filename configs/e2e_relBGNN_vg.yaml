@@ -96,6 +96,7 @@ MODEL:
     WITH_MODULATED_DCN: false
 
   TWO_STAGE_HEAD:
+    PURE_SENMENTIC: true
     INDIVIDUAL_BOX: true
     UNION_BOX: false  #union和indi不能同时为true
     transformer_pos: true
