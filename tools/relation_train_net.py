@@ -2,7 +2,7 @@
 """
 Basic training script for PyTorch
 """
-#shit github
+#shit
 # Set up custom environment before nearly anything else is imported
 # NOTE: this should be the first import (no not reorder)
 
