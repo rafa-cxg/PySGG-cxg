@@ -81,6 +81,8 @@ class TwoStagePredictor(nn.Module):
         self.word_dim=cfg.MODEL.ROI_RELATION_HEAD.EMBED_DIM
         self.geometry_feat_dim = 128
         self.input_dim = (in_channels+self.word_dim+self.geometry_feat_dim)*2#4096
+        if cfg.MODEL.TWO_STAGE_HEAD.PURE_SENMENTIC:
+            self.input_dim=256+128
         self.hidden_dim = config.MODEL.TWO_STAGE_HEAD.HIDDEN_DIM#4096
         #待定self.context_layer=
         # post classification
@@ -152,8 +154,10 @@ class TwoStagePredictor(nn.Module):
                 obj_pos_embed = embed[idx].to('cuda')
                 rel_feats.append(obj_pos_embed)
             rel_feats=torch.cat(rel_feats,0)
-        else:
+        if cfg.MODEL.TWO_STAGE_HEAD.UNION_BOX:
             rel_feats = union_features
+        if cfg.MODEL.TWO_STAGE_HEAD.PURE_SENMENTIC:
+            rel_feats =obj_rep
         rel_feats = self.rel_classifier1(rel_feats)#[N,4]
         rel_feats = self.BN1(rel_feats)
         rel_feats = self.relu(rel_feats)
@@ -164,7 +168,10 @@ class TwoStagePredictor(nn.Module):
         num_rels = [r.shape[0] for r in rel_pair_idxs]
         assert len(num_rels) == len(num_objs)
         rel_cls_logits = rel_cls_logits.split(num_rels, dim=0)#把混在一起的结果按照每张图rel数量划分
-
+        for proposal, two_stage_logit in zip(inst_proposals, rel_cls_logits):
+            two_stage_logit = F.softmax(two_stage_logit, -1)  # 传给第二阶段的logit限制在0-1
+            proposal.add_field("two_stage_pred_rel_logits", two_stage_logit)
+            proposal.del_field('center')
 
 
         return  rel_cls_logits

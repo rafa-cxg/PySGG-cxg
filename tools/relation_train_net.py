@@ -685,7 +685,7 @@ def main():
     time_str = now.strftime("%Y-%m-%d_%H")
    
     cfg.OUTPUT_DIR = os.path.join(cfg.OUTPUT_DIR,
-    f"{mode}-{cfg.MODEL.ROI_RELATION_HEAD.PREDICTOR}",'cxg2')
+    f"{mode}-{cfg.MODEL.ROI_RELATION_HEAD.PREDICTOR}",'multi_2stage')
     # cfg.OUTPUT_DIR = os.path.join(
     #     cfg.OUTPUT_DIR,
     #     f"{mode}-{cfg.MODEL.ROI_RELATION_HEAD.PREDICTOR}",
@@ -700,7 +700,7 @@ def main():
     if output_dir:
         mkdir(output_dir)
 
-    logger = setup_logger("pysgg", output_dir, get_rank())
+    logger = setup_logger("pysgg", output_dir, get_rank())#从这里进入声明tfboard
     logger.info("Using {} GPUs".format(num_gpus))
     logger.info(args)  #logger后面打印所有arg的参数
     # if cfg.DEBUG:

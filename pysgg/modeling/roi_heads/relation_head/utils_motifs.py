@@ -156,11 +156,11 @@ def encode_rel_box_info(proposals,rel_pair_idxs):#todo 和上面的函数有很�
     """
     assert proposals[0].mode == 'xyxy'
     boxes_info = []
-    for rel_pair_idx in rel_pair_idxs:
-        sub_idx=rel_pair_idx[0]
-        obj_idx = rel_pair_idx[1]
-        boxes = proposals[sub_idx].bbox
-        img_size = proposals[sub_idx].size
+    for proposal,rel_pair_idx in zip(proposals,rel_pair_idxs):
+        sub_idx=rel_pair_idx[:,0]
+        obj_idx = rel_pair_idx[:,1]
+        boxes = proposal[sub_idx].bbox
+        img_size = proposal[sub_idx].size
         wid = img_size[0]
         hei = img_size[1]
         wh = boxes[:, 2:] - boxes[:, :2] + 1.0
@@ -170,8 +170,8 @@ def encode_rel_box_info(proposals,rel_pair_idxs):#todo 和上面的函数有很�
         sub_x1, sub_y1, sub_x2, sub_y2 = boxes.split([1,1,1,1], dim=-1)
         assert wid * hei != 0
         '''obj_box'''
-        boxes = proposals[obj_idx].bbox
-        img_size = proposals[obj_idx].size
+        boxes = proposal[obj_idx].bbox
+        img_size = proposal[obj_idx].size
         wid = img_size[0]
         hei = img_size[1]
         wh = boxes[:, 2:] - boxes[:, :2] + 1.0
@@ -180,9 +180,9 @@ def encode_rel_box_info(proposals,rel_pair_idxs):#todo 和上面的函数有很�
         obj_x, obj_y = xy.split([1, 1], dim=-1)
         obj_x1, obj_y1, obj_x2, obj_y2 = boxes.split([1, 1, 1, 1], dim=-1)
         assert wid * hei != 0
-        distance=torch.pow((sub_x-obj_x)^2+(sub_y-obj_y)^2,0.5)
+        distance=torch.pow(( torch.pow((sub_x-obj_x)/wid,2)+torch.pow((sub_y-obj_y)/hei,2)),0.5)
         iou=(sub_x2-obj_x1)*(sub_y2-obj_y1)/(obj_h*obj_w+sub_h*sub_w-(sub_x2-obj_x1)*(sub_y2-obj_y1))
-        assert  iou>=0
+
         info = torch.cat([distance,iou], dim=-1).view(-1, 2)
         boxes_info.append(info)
 

@@ -74,8 +74,8 @@ MODEL:
   MASK_ON: false
   RETINANET_ON: false
   META_ARCHITECTURE: GeneralizedRCNN
-#  PRETRAINED_DETECTOR_CKPT: checkpoints/predcls-BGNNPredictor/cxg/model_0010000.pth
-  PRETRAINED_DETECTOR_CKPT: /root/PySGG-cxg/checkpoints/predcls-BGNNPredictor/cxg2/model_0026800.pth
+  PRETRAINED_DETECTOR_CKPT: checkpoints/detection/pretrained_faster_rcnn/vg_faster_det.pth
+#  PRETRAINED_DETECTOR_CKPT: /root/PySGG-cxg/checkpoints/predcls-BGNNPredictor/cxg4/model_0047200.pth
   RELATION_ON: true
   RESNETS:
     BACKBONE_OUT_CHANNELS: 256
@@ -97,10 +97,10 @@ MODEL:
 
   TWO_STAGE_HEAD:
     PURE_SENMENTIC: true
-    INDIVIDUAL_BOX: true
+    INDIVIDUAL_BOX: false
     UNION_BOX: false  #union和indi不能同时为true
-    transformer_pos: true
-    HIDDEN_DIM: 2048
+    transformer_pos: false
+    HIDDEN_DIM: 1024
     PREDICTOR: TwoStagePredictor
     NUM_REL_GROUP: 3
     BATCH_SIZE_PER_IMAGE: 1000
@@ -367,7 +367,7 @@ OUTPUT_DIR: checkpoints
 PATHS_CATALOG: pysgg/config/paths_catalog.py
 PATHS_DATA: pysgg/config/../data/datasets
 SOLVER:
-  BASE_LR: 0.00001 #0.008
+  BASE_LR: 0.001 #0.008
   BIAS_LR_FACTOR: 1
   CHECKPOINT_PERIOD: 2000
   CLIP_NORM: 5.0
@@ -382,7 +382,7 @@ SOLVER:
     COOLDOWN: 0
     FACTOR: 0.3
     MAX_DECAY_STEP: 3
-    PATIENCE: 6
+    PATIENCE: 3
     THRESHOLD: 0.001
     TYPE: WarmupReduceLROnPlateau
   STEPS:

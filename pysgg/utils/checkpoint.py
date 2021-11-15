@@ -67,13 +67,13 @@ class Checkpointer(object):
         if with_optim:
             if "optimizer" in checkpoint and self.optimizer:
                 self.logger.info("Loading optimizer from {}".format(f))
-                self.optimizer.load_state_dict(checkpoint.pop("optimizer"))
+                self.optimizer.load_state_dict(checkpoint.pop("optimizer").state_dict())
             if "scheduler" in checkpoint and self.scheduler:
                 self.logger.info("Loading scheduler from {}".format(f))#说明以下的都是会载入scheuler
                 if update_schedule:
                     self.scheduler.last_epoch = checkpoint["iteration"]#根据之前训练的lr和step继续训练
                 else:
-                    self.scheduler.load_state_dict(checkpoint.pop("scheduler"))#起始lr是最新的，但从新wormup
+                    self.scheduler.load_state_dict(checkpoint.pop("scheduler").state_dict())#起始lr是最新的，但从新wormup
 
         # return any further checkpoint data
         return checkpoint

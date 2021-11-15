@@ -1,5 +1,6 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 import json
+import pickle
 
 import torch
 from pysgg.data import get_dataset_statistics
@@ -14,6 +15,7 @@ from ..relation_head.loss import make_two_stage_loss_evaluator
 from ..relation_head.roi_relation_feature_extractors import make_roi_relation_feature_extractor
 from .two_stage_predictors import make_Two_Stage_predictor
 from ..relation_head.sampling import make_two_stage_samp_processor
+from ..relation_head.utils_motifs import encode_rel_box_info
 
 from ..attribute_head.roi_attribute_feature_extractors import (
     make_roi_attribute_feature_extractor,
@@ -108,11 +110,16 @@ class Two_Stage_Head(torch.nn.Module):
 
         # the fix features head for extracting the instances ROI features for
         # obj detection
-        self.box_feature_extractor = make_roi_box_feature_extractor(cfg, in_channels)#FPN2MLPFeatureExtractor，来自/box_head/
+        if cfg.MODEL.TWO_STAGE_HEAD.INDIVIDUAL_BOX:
+             self.box_feature_extractor = make_roi_box_feature_extractor(cfg, in_channels)#FPN2MLPFeatureExtractor，来自/box_head/
+             feat_dim = self.box_feature_extractor.out_channels  # 4096
+             if isinstance(self.box_feature_extractor, ResNet50Conv5ROIFeatureExtractor):
+                 feat_dim = self.box_feature_extractor.flatten_out_channels
+        if cfg.MODEL.TWO_STAGE_HEAD.PURE_SENMENTIC:
+            self.pure_senmatic_feature=make_pure_senmatic_feature(cfg,in_channels)
+            feat_dim=4096#权宜之计，这里并不用到它
 
-        feat_dim = self.box_feature_extractor.out_channels#4096
-        if isinstance(self.box_feature_extractor, ResNet50Conv5ROIFeatureExtractor):
-            feat_dim = self.box_feature_extractor.flatten_out_channels
+
 
         self.two_stage_predictor = make_Two_Stage_predictor(cfg, feat_dim)
 
@@ -206,19 +213,24 @@ class Two_Stage_Head(torch.nn.Module):
             sampling = dict(proposals=proposals, rel_labels=rel_labels,rel_labels_all=rel_labels_all,
                             rel_pair_idxs=rel_pair_idxs, gt_rel_binarys_matrix=gt_rel_binarys_matrix)
 
-        embed = env_pos_rel_box_info(proposals, rel_pair_idxs)
+        embed = env_pos_rel_box_info(proposals, rel_pair_idxs)#这是transformer位置编码
         sampling.update(embed=embed)
 
         if self.mode \
                 == "predcls":
             # overload the pred logits by the gt label
             device = features[0].device
+        if self.cfg.MODEL.TWO_STAGE_HEAD.PURE_SENMENTIC==False:
+            # use box_head to extract features that will be fed to the later predictor processing
+            roi_features = self.box_feature_extractor(features, proposals)#roi_align, roi_features:[num_all_prop,4096]
+            if isinstance(self.box_feature_extractor, ResNet50Conv5ROIFeatureExtractor):
+                roi_features = self.box_feature_extractor.flatten_roi_features(roi_features)
+            obj_rep = cat((roi_features, obj_embed_by_pred_dist, pos_embed), -1)  # 4096,200,128.->4424
+        else:#纯语义特征
+            roi_features=None
+            obj_rep=self.pure_senmatic_feature(proposals, rel_pair_idxs)#1024
 
-        # use box_head to extract features that will be fed to the later predictor processing
-        roi_features = self.box_feature_extractor(features, proposals)#roi_align, roi_features:[num_all_prop,4096]
-        if isinstance(self.box_feature_extractor, ResNet50Conv5ROIFeatureExtractor):
-            roi_features = self.box_feature_extractor.flatten_roi_features(roi_features)
-        obj_rep = cat((roi_features, obj_embed_by_pred_dist, pos_embed), -1)  # 4096,200,128.->4424
+
         if self.cfg.MODEL.TWO_STAGE_HEAD.INDIVIDUAL_BOX:
             sampling.update(obj_rep=obj_rep)
         if self.rel_prop_on:#true
@@ -261,13 +273,8 @@ class Two_Stage_Head(torch.nn.Module):
                 embed,
                 logger)# 计算loss:RelAwareLoss. add_losses包括4个，分别对应4个iteration的predict预测loss RelAwareLoss
         else:
-            sampling.update(rel_labels_2stage=rel_labels_2stage)
+            sampling.update(rel_labels_2stage=rel_labels_2stage)#?
             relation_logits = self.two_stage_predictor(features[4],**sampling)#[N_pair,num_group]
-
-        for proposal, two_stage_logit in zip(proposals, relation_logits):
-            proposal.add_field("two_stage_pred_rel_logits", two_stage_logit)
-            proposal.del_field('center')
-
 
         # proposals, rel_pair_idxs, rel_pn_labels,relness_net_input,roi_features,union_features, None
         # for test
@@ -291,6 +298,7 @@ class Two_Stage_Head(torch.nn.Module):
                         output_losses_checked[key] = output_losses[key]
         output_losses = output_losses_checked
 
+
         return  proposals,sampling, output_losses#roi_features:[num_all_prop,4096]
 
 
@@ -301,3 +309,42 @@ def build_two_stage_head(cfg, in_channels):
     and make it a parameter in the config
     """
     return Two_Stage_Head(cfg, in_channels)
+class  make_pure_senmatic_feature(torch.nn.Module):
+    def __init__(self, cfg, in_channels):
+        super(make_pure_senmatic_feature, self).__init__()
+        self.cfg=cfg
+        self.in_channels=in_channels
+        with open(os.path.join(self.cfg.OUTPUT_DIR, "record_sub_distribution.pkl"), 'rb') as f1:
+            self.sub_distribution= torch.tensor(pickle.load(f1)).clone().detach()
+        with open(os.path.join(self.cfg.OUTPUT_DIR, "record_obj_distribution.pkl"), 'rb') as f2:
+            self.obj_distribution= torch.tensor(pickle.load(f2)).clone().detach()
+        self.obj_embed=nn.Sequential(
+            *[
+                make_fc(51*2,256),
+                nn.ReLU(inplace=True),
+            ]
+        )
+        self.interact_embed = nn.Sequential(
+            *[
+                make_fc(2, 128),
+                nn.ReLU(inplace=True),
+            ]
+        )
+
+    def forward(self,proposals,rel_pair_idxs):
+        interact_embed = self.interact_embed(encode_rel_box_info(proposals, rel_pair_idxs))
+        sub_embed=[]
+        obj_embed=[]
+        # for image,rel_pair_idx in enumerate(rel_pair_idxs):
+        #     sub_embed.append(self.sub_distribution[proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 0]]])
+        #     obj_embed.append(self.obj_distribution[proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 1]]])
+        # sub_embed =torch.cat(sub_embed).cuda()
+        # obj_embed =torch.cat(obj_embed).cuda()
+        for image,rel_pair_idx in enumerate(rel_pair_idxs):
+            sub_embed.append(self.sub_distribution[proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 0]]])
+            obj_embed.append(self.obj_distribution[proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 1]]])
+        sub_embed =torch.cat(sub_embed).cuda()
+        obj_embed =torch.cat(obj_embed).cuda()
+        return  torch.cat((self.obj_embed(torch.cat((sub_embed,obj_embed),-1).type(torch.cuda.FloatTensor)),interact_embed),dim=-1)
+
+

@@ -74,11 +74,11 @@ def multiprocess_Wasserstein(group_array_,original_array,col_number,similarity,i
 def norm_distribution(prob, num=150,dim=1):
     num=prob.shape[1]
     prob=prob
-    prob_weight = prob[:, :num]
+    prob_weight = prob[:, :num].numpy()
     sum_value = np.sum(prob_weight, keepdims=True, axis=dim)
     prob_weight = prob_weight / np.repeat(sum_value, prob_weight.shape[dim], axis=dim)
     return prob_weight
-def plot_distribution_bar(rel_array,data): #input should be an np array
+def plot_distribution_bar(rel_array,data,object=False): #input should be an np array
     stastic_photo_dir='clustering/stastic_photo_dir/'
     CHECK_FOLDER = os.path.isdir(stastic_photo_dir)
     if not CHECK_FOLDER:
@@ -96,10 +96,14 @@ def plot_distribution_bar(rel_array,data): #input should be an np array
         plt.bar(xs, objects, color='maroon',width=0.4)
         # plt.xticks(xs, labels)  # Replace default x-ticks with xs, then replace xs with labels
         # plt.yticks(ys)
-        predicates = data.ind_to_predicates[predicates]
-        plt.xlabel(predicates)
+        if object==False:#代表统计的是predicate
+            label = data.ind_to_predicates[predicates]
+        else:
+            label = data.ind_to_classes[predicates]
+
+        plt.xlabel(label)
         plt.show()
-        plt.savefig(stastic_photo_dir+str(predicates)+'.png')
+        plt.savefig(stastic_photo_dir+str(label)+'.png')
 
 
 def map_predicate2cluster(data,cluster_array):
@@ -163,8 +167,31 @@ def get_dataset_statistics(cfg):
     torch.save(result, save_file)
     return result
 
+def multi_process_stastics(train_idx,train_data,rel_obj_distribution,sub_rel_distribution,obj_rel_distribution,pred_counter,num_process=10):
 
-def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=True,clustering=True):
+
+    for i in tqdm(train_idx):
+
+        tgt_rel_matrix = train_data.get_groundtruth(i, inner_idx=False).get_field("relation")  # [n*n]
+        tgt_pair_idxs = torch.nonzero(tgt_rel_matrix > 0)
+        tgt_head_idxs = tgt_pair_idxs[:, 0].contiguous().view(-1)
+        tgt_tail_idxs = tgt_pair_idxs[:, 1].contiguous().view(-1)
+        tgt_rel_labs = tgt_rel_matrix[tgt_head_idxs, tgt_tail_idxs].contiguous().view(-1)
+        sub_class = train_data.get_groundtruth(i, inner_idx=False).get_field("labels")[tgt_head_idxs]
+        obj_class = train_data.get_groundtruth(i, inner_idx=False).get_field("labels")[tgt_tail_idxs]
+        relation_tuple = torch.stack((sub_class, obj_class, tgt_rel_labs), dim=1)
+        for idx, each in enumerate(tgt_rel_labs):
+            pred_counter[int(each)] += 1  # 计算的是每个rel出现累计次数
+            rel_obj_distribution[int(each)][relation_tuple[idx][0]] += 1
+            rel_obj_distribution[int(each)][relation_tuple[idx][1]] += 1
+        '''统计图片中出现的所有object'''
+        for r in relation_tuple:
+            sub_rel_distribution[int(r[0])][int(r[2])] += 1
+            obj_rel_distribution[int(r[1])][int(r[2])] += 1
+    return  rel_obj_distribution,sub_rel_distribution,obj_rel_distribution,pred_counter
+
+
+def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=False,clustering=True):
     """save relation frequency distribution after the sampling etc processing
     the data distribution that model will be trained on it
 
@@ -176,22 +203,27 @@ def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=Tr
     if is_main_process():
         print("Get relation class frequency distribution on dataset.")
         pred_counter = Counter()
-        rel_obj_distribution={k: v for k, v in enumerate([ [0 for j in range(151)] for i in range(51)])}#dict:50,each of then:150
-        for i in tqdm(range(len(train_data))):
-            tgt_rel_matrix = train_data.get_groundtruth(i, inner_idx=False).get_field("relation")#[n*n]
-            tgt_pair_idxs = torch.nonzero(tgt_rel_matrix > 0)
-            tgt_head_idxs = tgt_pair_idxs[:, 0].contiguous().view(-1)
-            tgt_tail_idxs = tgt_pair_idxs[:, 1].contiguous().view(-1)
-            tgt_rel_labs = tgt_rel_matrix[tgt_head_idxs, tgt_tail_idxs].contiguous().view(-1)
-            sub_class=train_data.get_groundtruth(i, inner_idx=False).get_field("labels")[tgt_head_idxs]
-            obj_class = train_data.get_groundtruth(i, inner_idx=False).get_field("labels")[tgt_tail_idxs]
-            relation_tuple=torch.stack((sub_class,obj_class,tgt_rel_labs),dim=1)
-            for idx,each in enumerate(tgt_rel_labs):
-                pred_counter[each] += 1#计算的是每个rel出现累计次数
-                rel_obj_distribution[int(each)][relation_tuple[idx][0]]+=1
-                rel_obj_distribution[int(each)][relation_tuple[idx][1]] += 1
-                '''统计图片中出现的所有object'''
+        rel_obj_distribution = torch.zeros((51,151),dtype=torch.int)
+        sub_rel_distribution = torch.zeros((151,51),dtype=torch.int)
+        obj_rel_distribution = torch.zeros((151, 51), dtype=torch.int)
+        num_process=20
+        pool = Pool(processes=num_process)
+        split_data = torch.chunk(torch.arange(0,len(train_data),dtype=torch.int), num_process, -1)
+        f1 = pool.map(
+            partial(multi_process_stastics, train_data=train_data,rel_obj_distribution=rel_obj_distribution, sub_rel_distribution=sub_rel_distribution,obj_rel_distribution=obj_rel_distribution, pred_counter=pred_counter),
+            split_data)
 
+        pool.close()
+        pool.join()
+        '''把多进程内容融合'''
+        rel_obj_distribution = torch.zeros((51, 151), dtype=torch.int)
+        sub_rel_distribution = torch.zeros((151, 51), dtype=torch.int)
+        obj_rel_distribution = torch.zeros((151, 51), dtype=torch.int)
+        for part in f1:
+            rel_obj_distribution+=part[0]
+            sub_rel_distribution+=part[1]
+            obj_rel_distribution += part[2]
+            pred_counter+=part[3]
 
         with open(os.path.join(cfg.OUTPUT_DIR, "pred_counter.pkl"), 'wb') as f:
             pickle.dump(pred_counter, f)
@@ -199,9 +231,20 @@ def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=Tr
             with open(os.path.join(cfg.OUTPUT_DIR, "record_rel_distribution.pkl"), 'wb') as f:
                 pickle.dump(rel_obj_distribution, f)
             '''转换成np array'''
-            rel_obj_distribution = list(rel_obj_distribution.values())
-            rel_obj_distribution = np.array(rel_obj_distribution)  # (51,151)
+            rel_obj_distribution = rel_obj_distribution.numpy()
+            # rel_obj_distribution = np.array(rel_obj_distribution)  # (51,151)
             plot_distribution_bar(rel_obj_distribution,train_data)
+        '''sub'''
+        with open(os.path.join(cfg.OUTPUT_DIR, "record_sub_distribution.pkl"), 'wb') as f:
+            pickle.dump(sub_rel_distribution, f)
+        sub_rel_distribution = sub_rel_distribution.numpy() # (51,151)
+        plot_distribution_bar(sub_rel_distribution, train_data,object=True)
+        '''obj'''
+        with open(os.path.join(cfg.OUTPUT_DIR, "record_obj_distribution.pkl"), 'wb') as f:
+            pickle.dump(obj_rel_distribution, f)
+        obj_rel_distribution = obj_rel_distribution.numpy()  # (51,151)
+        plot_distribution_bar(obj_rel_distribution, train_data, object=True)
+
         if clustering:
             rel_obj_distribution_norm=norm_distribution(rel_obj_distribution[1:,1:])
             Wasserstein_distance_mat=compute_Wasserstein_distance(rel_obj_distribution_norm)

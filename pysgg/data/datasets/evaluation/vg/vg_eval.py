@@ -325,7 +325,7 @@ def do_vg_evaluation(
         result_str += longtail_part_res_str
         result_str += f"(Non-Graph-Constraint) {ng_longtail_part_res_str}"
 
-        result_dict_list_to_log.extend([generate_eval_res_dict(eval_recall, mode),
+        result_dict_list_to_log.extend([generate_eval_res_dict(eval_recall, mode),#这里存放的是list of dict，每个元素代表一种evaluator
                                         generate_eval_res_dict(eval_nog_recall, mode),
                                         generate_eval_res_dict(eval_zeroshot_recall, mode),
                                         generate_eval_res_dict(eval_mean_recall, mode),
