@@ -197,7 +197,8 @@ def train(
                 rel_pn_module_ref.append(
                     model.roi_heads.relation.predictor.context_layer.pre_rel_classifier
                 )
-
+    if cfg.MODEL.TRAIN_FIRST_STAGE_ONLY==True:
+        eval_modules=eval_modules+tuple([model.roi_heads.relation])
     fix_eval_modules(eval_modules)# 这些模块会被设为不计算梯度
     set_train_modules(train_modules)#q为什么全0?
 
@@ -387,8 +388,8 @@ def train(
 
         loss_dict = model(images, targets, logger=logger) #predcls:dict:4
 
-        losses = sum(loss for loss in loss_dict.values())
-
+        # losses = sum(loss for loss in loss_dict.values())
+        losses=loss_dict['loss_two_stage']+2*loss_dict['loss_two_stage']+0.5*sum(loss for loss in loss_dict.values())
         # reduce losses over all GPUs for logging purposes
         loss_dict_reduced = reduce_loss_dict(loss_dict)#
         losses_reduced = sum(loss for loss in loss_dict_reduced.values())
@@ -685,7 +686,7 @@ def main():
     time_str = now.strftime("%Y-%m-%d_%H")
    
     cfg.OUTPUT_DIR = os.path.join(cfg.OUTPUT_DIR,
-    f"{mode}-{cfg.MODEL.ROI_RELATION_HEAD.PREDICTOR}",'multi_2stage')
+    f"{mode}-{cfg.MODEL.ROI_RELATION_HEAD.PREDICTOR}",'only_1stage')
     # cfg.OUTPUT_DIR = os.path.join(
     #     cfg.OUTPUT_DIR,
     #     f"{mode}-{cfg.MODEL.ROI_RELATION_HEAD.PREDICTOR}",

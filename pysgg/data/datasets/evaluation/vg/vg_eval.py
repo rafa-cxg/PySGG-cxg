@@ -14,7 +14,7 @@ from pysgg.data.datasets.evaluation.coco.coco_eval import COCOResults
 from pysgg.data.datasets.evaluation.vg.sgg_eval import SGRecall, SGNoGraphConstraintRecall, \
     SGZeroShotRecall, SGPairAccuracy, SGMeanRecall, SGStagewiseRecall, SGNGMeanRecall
 from pysgg.data.datasets.visual_genome import HEAD, TAIL, BODY
-
+import torch.nn.functional as F
 eval_times = 0
 
 
@@ -26,6 +26,7 @@ def do_vg_evaluation(
         logger,
         iou_types,
 ):
+    cluster_dir='clustering/'
     # get zeroshot triplet
     zeroshot_triplet = torch.load("pysgg/data/datasets/evaluation/vg/zeroshot_triplet.pytorch",
                                   map_location=torch.device("cpu")).long().numpy()
@@ -42,10 +43,21 @@ def do_vg_evaluation(
         mode = 'sgdet'
 
     num_rel_category = cfg.MODEL.ROI_RELATION_HEAD.NUM_CLASSES
+    num_cluster_category=cfg.MODEL.TWO_STAGE_HEAD.NUM_REL_GROUP+1
     multiple_preds = cfg.TEST.RELATION.MULTIPLE_PREDS
     iou_thres = cfg.TEST.RELATION.IOU_THRESHOLD
     assert mode in {'predcls', 'sgdet', 'sgcls', 'phrdet', 'preddet'}
-
+    #为了在gt中加入第一阶段gt
+    predicateid2cluster={}
+    with open(os.path.join(cluster_dir, 'predicate2cluster.json'), 'r') as json_file:#事实上应该叫c2p
+        pc = json.load(json_file)
+        for key, value in pc.items():
+            for v in value:
+                predicateid2cluster[int(v)] = int(key) + 1  # 留出backgroud位置
+                predicateid2cluster[0]=0
+        p2c=torch.zeros((51),dtype=torch.int).to('cuda')
+        for idx in range(0,51):#转换成tensor
+            p2c[idx]=predicateid2cluster[idx]
     groundtruths = []
     for image_id, prediction in enumerate(predictions):
         img_info = dataset.get_img_info(image_id)
@@ -53,8 +65,11 @@ def do_vg_evaluation(
         image_height = img_info["height"]
         # recover original size which is before transform
         predictions[image_id] = prediction.resize((image_width, image_height))
-
+        '''把cluster的结果，以truple方式添加到gt中'''
         gt = dataset.get_groundtruth(image_id, evaluation=True)
+        gt_2stage_tuple=gt.get_field('relation_tuple').clone()
+        gt_2stage_tuple[:,2]=p2c[gt_2stage_tuple[:,2]]
+        gt.add_field('2stage_tuple',gt_2stage_tuple)
         groundtruths.append(gt)
 
     save_output(output_folder, groundtruths, predictions, dataset)
@@ -205,7 +220,7 @@ def do_vg_evaluation(
         eval_pair_accuracy.register_container(mode)
         evaluator['eval_pair_accuracy'] = eval_pair_accuracy
 
-        # used for meanRecall@K
+        # used for meanRecall@K ,include 2 stage meanRecall@K
         eval_mean_recall = SGMeanRecall(rel_eval_result_dict, num_rel_category, dataset.ind_to_predicates,
                                         print_detail=True)
         eval_mean_recall.register_container(mode)
@@ -234,7 +249,7 @@ def do_vg_evaluation(
 
         logger.info("evaluating relationship predictions..")
         for groundtruth, prediction in tqdm(zip(groundtruths, predictions), total=len(predictions)):#'relation_tuple':[sub_id\obj_id\rel]
-            evaluate_relation_of_one_image(groundtruth, prediction, global_container, evaluator)#该函数中，evaluater存储的各类metric函数库，实际计算结果都在每个函数的self.result_dict里面，已append list方式
+            evaluate_relation_of_one_image(groundtruth, prediction, global_container, evaluator)#local_container再此创建。该函数中，evaluater存储的各类metric函数库，实际计算结果都在每个函数的self.result_dict里面，已append list方式
 
         # calculate mean recall
         eval_mean_recall.calculate_mean_recall(mode)#上步仅仅collect recall item(每幅图),evaluater元素包括eval_mean_recall
@@ -325,7 +340,7 @@ def do_vg_evaluation(
         result_str += longtail_part_res_str
         result_str += f"(Non-Graph-Constraint) {ng_longtail_part_res_str}"
 
-        result_dict_list_to_log.extend([generate_eval_res_dict(eval_recall, mode),#这里存放的是list of dict，每个元素代表一种evaluator
+        result_dict_list_to_log.extend([generate_eval_res_dict(eval_recall, mode),#这里存放的是list of dict，每个元素代表一种evaluator,generate_eval_res_dict是取每个metric内部，所有图片的平均
                                         generate_eval_res_dict(eval_nog_recall, mode),
                                         generate_eval_res_dict(eval_zeroshot_recall, mode),
                                         generate_eval_res_dict(eval_mean_recall, mode),
@@ -336,8 +351,13 @@ def do_vg_evaluation(
             result_str += eval_pair_accuracy.generate_print_string(mode)
 
         result_str += '=' * 100 + '\n'
-        # average the all recall and mean recall with the weight
-        avg_metrics = np.mean(rel_eval_result_dict[mode + '_recall'][100]) * 0.5 \
+        '''如果单训第一阶段'''
+        if cfg.SOLVER.VAL_2STAGE:
+            avg_metrics =np.mean(rel_eval_result_dict[mode + '_2stage_mean_recall'][100])
+
+        else:
+            # average the all recall and mean recall with the weight
+            avg_metrics = np.mean(rel_eval_result_dict[mode + '_recall'][100]) * 0.5 \
                       + np.mean(rel_eval_result_dict[mode + '_mean_recall'][100]) * 0.5
 
         if output_folder:
@@ -348,7 +368,7 @@ def do_vg_evaluation(
         with open(os.path.join(output_folder, "evaluation_res.txt"), 'w') as f:
             f.write(result_str)
 
-    return float(avg_metrics), result_dict_list_to_log
+    return float(avg_metrics), result_dict_list_to_log# avg_metrics返回的第一个值就是recall和mean recall的平均
 
 
 def save_output(output_folder, groundtruths, predictions, dataset):
@@ -391,20 +411,27 @@ def evaluate_relation_of_one_image(groundtruth, prediction, global_container, ev
 
     local_container = {}
     local_container['gt_rels'] = groundtruth.get_field('relation_tuple').long().detach().cpu().numpy()#[23，3]
-
+    local_container['gt_2stage'] = groundtruth.get_field('2stage_tuple').long().detach().cpu().numpy()  # [23，3]
     # if there is no gt relations for current image, then skip it
     if len(local_container['gt_rels']) == 0:
         return
 
     local_container['gt_boxes'] = groundtruth.convert('xyxy').bbox.detach().cpu().numpy()  # (#gt_objs, 4)
     local_container['gt_classes'] = groundtruth.get_field('labels').long().detach().cpu().numpy()  # (#gt_objs, )
-
+    '''获得1stage的gt标签'''
+    # local_container['gt_2stage'] = prediction.get_field('pred_2stage_labels').long().detach().cpu().numpy()
     # about relations
     local_container['pred_rel_inds'] = prediction.get_field(
         'rel_pair_idxs').long().detach().cpu().numpy()  # sgdet:(#pred_rels, 2) eg(4096,2) .predcls:[num_box!,2]
     local_container['rel_scores'] = prediction.get_field(
         'pred_rel_scores').detach().cpu().numpy()  # (#pred_rels, num_pred_class)
 
+    local_container['pred_2stage_rel_inds'] = prediction.get_field(
+        'rel_2stage_pair_idx').long().detach().cpu().numpy()
+    local_container['2stage_rel_scores'] = prediction.get_field(
+        'two_stage_pred_rel_prob').detach().cpu().numpy()
+    # local_container['two_stage_pred_rel_prob']= prediction.get_field('two_stage_pred_rel_prob').detach().cpu().numpy()
+    local_container['pred_2stage_labels'] = prediction.get_field('pred_2stage_labels').detach().cpu().numpy()
     # about objects
     local_container['pred_boxes'] = prediction.convert('xyxy').bbox.detach().cpu().numpy()  # (#pred_objs, 4) ifpredcls:数值和gt_boxes一样
     local_container['pred_classes'] = prediction.get_field(

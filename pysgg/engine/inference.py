@@ -42,7 +42,7 @@ def compute_on_dataset(model, data_loader, device, synchronize_gather=True, time
                 #todo 为什么proposal上限80？
                 output = model(images.to(device), targets, logger=logger)#targets:BOXLIST #OUTPUT也是boxlist,但它的extra_fild和target relation_pair不同。rel上限4096
                 for op in output:
-                    op.del_field('two_stage_pred_rel_logits')
+                    # op.del_field('two_stage_pred_rel_logits')
                     op.del_field('predict_logits')
                     op.del_field('relness_mat')
             if timer:

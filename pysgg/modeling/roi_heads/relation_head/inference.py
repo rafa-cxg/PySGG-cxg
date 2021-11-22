@@ -1,4 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -60,7 +61,7 @@ class PostProcessor(nn.Module):
             results (list[BoxList]): one BoxList for each image, containing
                 the extra fields labels and scores
         """
-        relation_logits, refine_logits = x
+        relation_logits, refine_logits,two_stage_pred_rel_logits = x
 
 
         rel_binarys_matrix = None
@@ -80,8 +81,8 @@ class PostProcessor(nn.Module):
             finetune_obj_logits = refine_logits
 
         results = []
-        for i, (rel_logit, obj_logit, rel_pair_idx, box) in enumerate(zip(
-                relation_logits, finetune_obj_logits, rel_pair_idxs, boxes
+        for i, (rel_logit, obj_logit,two_stage_pred_rel_logit, rel_pair_idx, box) in enumerate(zip(
+                relation_logits, finetune_obj_logits,two_stage_pred_rel_logits, rel_pair_idxs, boxes
         )):
             if self.attribute_on:
                 att_logit = finetune_att_logits[i]
@@ -131,6 +132,10 @@ class PostProcessor(nn.Module):
             rel_class_prob = F.softmax(rel_logit, -1)
             rel_scores, rel_class = rel_class_prob[:, 1:].max(dim=1)
             rel_class = rel_class + 1
+            '''2 stage'''
+            rel_2stage_class_prob = F.softmax(two_stage_pred_rel_logit, -1)
+            rel_2stage_scores, rel_2stage_class = rel_2stage_class_prob[:, 1:].max(dim=1)
+            rel_2stage_class = rel_2stage_class + 1
 
             if rel_binarys_matrix is not None:
                 rel_bin_mat = rel_binarys_matrix[i]
@@ -139,20 +144,31 @@ class PostProcessor(nn.Module):
             # TODO Kaihua: how about using weighted some here?  e.g. rel*1 + obj *0.8 + obj*0.8
             if self.use_relness_ranking:
                 triple_scores = rel_scores * obj_scores0 * obj_scores1 * relness
+                triple_2stage_scores = rel_2stage_scores * obj_scores0 * obj_scores1 * relness
             else:
-                triple_scores = rel_scores * obj_scores0 * obj_scores1
-
+                triple_scores = rel_scores * obj_scores0 * obj_scores1#不用rel_pn的情况下，rel的可能性就以50类中最大值当作rel_scores
+                triple_2stage_scores = rel_2stage_scores * obj_scores0 * obj_scores1
             _, sorting_idx = torch.sort(triple_scores.view(-1), dim=0, descending=True)
             rel_pair_idx = rel_pair_idx[sorting_idx]
             rel_class_prob = rel_class_prob[sorting_idx]
             rel_labels = rel_class[sorting_idx]
+            '''2 stage'''
+            _, sorting_2stage_idx = torch.sort(triple_2stage_scores.view(-1), dim=0, descending=True)
+            rel_2stage_pair_idx = rel_pair_idx[sorting_2stage_idx]
+            rel_2stage_class_prob = rel_2stage_class_prob[sorting_2stage_idx]
+            rel_2stage_labels = rel_2stage_class[sorting_2stage_idx]
+
+
 
             if rel_binarys_matrix is not None:
                 boxlist.add_field('relness', relness[sorting_idx])
-                
+            # boxlist.add_field('gt_2stage', (boxlist.get_field('gt_2stage'))[sorting_idx])
             boxlist.add_field('rel_pair_idxs', rel_pair_idx)  # (#rel, 2)
             boxlist.add_field('pred_rel_scores', rel_class_prob)  # (#rel, #rel_class)
             boxlist.add_field('pred_rel_labels', rel_labels)  # (#rel, )
+            boxlist.add_field('rel_2stage_pair_idx', rel_2stage_pair_idx)
+            boxlist.add_field('two_stage_pred_rel_prob', rel_2stage_class_prob)
+            boxlist.add_field('pred_2stage_labels', rel_2stage_labels)
             # should have fields : rel_pair_idxs, pred_rel_class_prob, pred_rel_labels, pred_labels, pred_scores
             # Note
             # TODO Kaihua: add a new type of element,

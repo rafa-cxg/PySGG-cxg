@@ -207,6 +207,7 @@ class Two_Stage_Head(torch.nn.Module):
                 rel_labels_all = rel_labels_2stage
         else:
             rel_labels, rel_labels_all, rel_labels_2stage,gt_rel_binarys_matrix = None, None, None,None
+
             rel_pair_idxs = self.samp_processor.prepare_test_pairs(#不超过设定的max relation数，就全部保留
                 features[0].device, proposals
             )
@@ -278,8 +279,14 @@ class Two_Stage_Head(torch.nn.Module):
 
         # proposals, rel_pair_idxs, rel_pn_labels,relness_net_input,roi_features,union_features, None
         # for test
+        for proposal, two_stage_logit in zip(proposals, relation_logits):
+            # two_stage_logit = F.softmax(two_stage_logit, -1)  # 传给第二阶段的logit限制在0-1
+            proposal.del_field('center')
+            proposal.add_field("two_stage_pred_rel_logits", two_stage_logit)
+
         if not self.training:
             result =proposals
+
 
             return  result,sampling, {}
 

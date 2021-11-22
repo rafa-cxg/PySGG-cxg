@@ -36,6 +36,7 @@ INPUT:
   TO_BGR255: true
   VERTICAL_FLIP_PROB_TRAIN: 0.0
 MODEL:
+  TRAIN_FIRST_STAGE_ONLY: True
   ATTRIBUTE_ON: false
   TWO_STAGE_ON: true
   BACKBONE:
@@ -75,7 +76,7 @@ MODEL:
   RETINANET_ON: false
   META_ARCHITECTURE: GeneralizedRCNN
   PRETRAINED_DETECTOR_CKPT: checkpoints/detection/pretrained_faster_rcnn/vg_faster_det.pth
-#  PRETRAINED_DETECTOR_CKPT: /root/PySGG-cxg/checkpoints/predcls-BGNNPredictor/cxg4/model_0047200.pth
+#  PRETRAINED_DETECTOR_CKPT: checkpoints/predcls-BGNNPredictor/cxg4/model_0055200.pth
   RELATION_ON: true
   RESNETS:
     BACKBONE_OUT_CHANNELS: 256
@@ -378,9 +379,10 @@ SOLVER:
   MOMENTUM: 0.9
   PRE_VAL: false
   PRINT_GRAD_FREQ: 4000
+  VAL_2STAGE: true
   SCHEDULE:
     COOLDOWN: 0
-    FACTOR: 0.3
+    FACTOR: 0.8
     MAX_DECAY_STEP: 3
     PATIENCE: 3
     THRESHOLD: 0.001

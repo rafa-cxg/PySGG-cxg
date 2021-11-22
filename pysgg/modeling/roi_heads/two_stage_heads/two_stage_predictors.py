@@ -168,10 +168,7 @@ class TwoStagePredictor(nn.Module):
         num_rels = [r.shape[0] for r in rel_pair_idxs]
         assert len(num_rels) == len(num_objs)
         rel_cls_logits = rel_cls_logits.split(num_rels, dim=0)#把混在一起的结果按照每张图rel数量划分
-        for proposal, two_stage_logit in zip(inst_proposals, rel_cls_logits):
-            two_stage_logit = F.softmax(two_stage_logit, -1)  # 传给第二阶段的logit限制在0-1
-            proposal.add_field("two_stage_pred_rel_logits", two_stage_logit)
-            proposal.del_field('center')
+
 
 
         return  rel_cls_logits

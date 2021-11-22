@@ -158,12 +158,14 @@ class ROIRelationHead(torch.nn.Module):
 
         if self.mode == "predcls":
             # overload the pred logits by the gt label
+            # gt_2stage=0
             device = features[0].device
             for proposal in proposals:
                 obj_labels = proposal.get_field("labels")
                 proposal.add_field("predict_logits", to_onehot(obj_labels, self.num_obj_cls))
                 proposal.add_field("pred_scores", torch.ones(len(obj_labels)).to(device))#虽然key是pred..但对于predcls来说，都是确定的
                 proposal.add_field("pred_labels", obj_labels.to(device))
+                # proposal.add_field("gt_2stage", gt_2stage)
 
         # use box_head to extract features that will be fed to the later predictor processing
         roi_features = self.box_feature_extractor(features, proposals)#roi_align, roi_features:[num_prop,4096]
@@ -186,7 +188,7 @@ class ROIRelationHead(torch.nn.Module):
                 gt_rel_binarys_matrix = [each.float().cuda() for each in gt_rel_binarys_matrix]
 
 
-            if self.rel_prop_type == "rel_pn":#rel proposal network . rel_prop_type=relawarefeature
+            if self.rel_prop_type == "rel_pn":#rel proposal network . rel_prop_type=relawarefeature DEFAULT: FALSE
                 relness_matrix, rel_pn_loss = self.rel_pn(
                     proposals,
                     roi_features,
@@ -243,17 +245,16 @@ class ROIRelationHead(torch.nn.Module):
 
             with open('clustering/predicate2cluster.json', 'r') as f:
                 predicate2cluster = json.load(f)
-            sactter_two_stage_logits_batch = []
+            # sactter_two_stage_logits_batch = []
             for idx, proposal in enumerate(proposals):
-                sactter_two_stage_logits = torch.zeros(proposal.get_field("two_stage_pred_rel_logits").size(0),
-                                                       self.cfg.MODEL.ROI_RELATION_HEAD.NUM_CLASSES).float().to(device)
+                sactter_two_stage_logits = torch.zeros(proposal.get_field('two_stage_pred_rel_logits').size(0),self.cfg.MODEL.ROI_RELATION_HEAD.NUM_CLASSES).float().to(device)
 
                 for key, value in predicate2cluster.items():
                     sactter_two_stage_logits[:, [int(i) for i in value]] = proposal.get_field(
                         "two_stage_pred_rel_logits")[:, int(key) + 1].unsqueeze(-1).expand(-1, len(value))
                 sactter_two_stage_logits[:, 0] = proposal.get_field("two_stage_pred_rel_logits")[:, 0]
-                sactter_two_stage_logits_batch.append(sactter_two_stage_logits)
-                relation_logits[idx] = relation_logits[idx]*sactter_two_stage_logits
+                # sactter_two_stage_logits_batch.append(sactter_two_stage_logits)
+                relation_logits[idx] = relation_logits[idx]+sactter_two_stage_logits
 
 
 
@@ -264,9 +265,10 @@ class ROIRelationHead(torch.nn.Module):
             if not self.object_cls_refine:
                 # if don't use object classification refine, we just use the initial logits
                 obj_refine_logits = [prop.get_field("predict_logits") for prop in proposals]
-
-            result = self.post_processor(
-                (relation_logits, obj_refine_logits), rel_pair_idxs, proposals
+            two_stage_pred_rel_logits = [prop.get_field("two_stage_pred_rel_logits") for prop in proposals]
+            '''post_processor只在test时期采用'''
+            result = self.post_processor(#result包括extra_fields和box
+                (relation_logits, obj_refine_logits,two_stage_pred_rel_logits), rel_pair_idxs, proposals
             )
 
             return roi_features, result, {}

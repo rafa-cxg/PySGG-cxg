@@ -173,7 +173,7 @@ class TwoStageLossComputation(object):
     def __init__(
         self,
         num_rel_group,
-        alpha=0.98, gamma=10.0,
+        alpha=0.999, gamma=5.0,
             logits=True
     ):
         """

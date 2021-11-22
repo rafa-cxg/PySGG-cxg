@@ -102,7 +102,7 @@ _C.DATALOADER.SIZE_DIVISIBILITY = 0
 # is compatible. This groups portrait images together, and landscape images
 # are not batched with portrait images.
 _C.DATALOADER.ASPECT_RATIO_GROUPING = True
-
+_C.MODEL.TRAIN_FIRST_STAGE_ONLY = True
 # ---------------------------------------------------------------------------- #
 # Backbone options
 # ---------------------------------------------------------------------------- #
@@ -753,6 +753,7 @@ _C.SOLVER.PRINT_GRAD_FREQ = 5000
 _C.SOLVER.TO_VAL = True
 _C.SOLVER.PRE_VAL = True
 _C.SOLVER.VAL_PERIOD = 2500
+_C.SOLVER.VAL_2STAGE = False
 
 # update schedule
 # when load from a previous model, if set to True
