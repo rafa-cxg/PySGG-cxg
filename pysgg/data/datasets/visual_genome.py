@@ -46,7 +46,7 @@ class VGDataset(torch.utils.data.Dataset):
 
     def __init__(self, split, img_dir, roidb_file, dict_file, image_file, transforms=None,
                  filter_empty_rels=True, num_im=-1, num_val_im=5000, check_img_file=False,
-                 filter_duplicate_rels=True, filter_non_overlap=True, flip_aug=False):
+                 filter_duplicate_rels=False, filter_non_overlap=False, flip_aug=True):
         """
         Torch dataset for VisualGenome
         Parameters:
@@ -71,13 +71,13 @@ class VGDataset(torch.utils.data.Dataset):
         # num_val_im = 1000
 
         assert split in {'train', 'val', 'test'}
-        self.flip_aug = flip_aug#false
+        self.flip_aug = flip_aug#false 没起作用
         self.split = split
         self.img_dir = img_dir
         self.dict_file = dict_file
         self.roidb_file = roidb_file
         self.image_file = image_file
-        self.filter_non_overlap = filter_non_overlap and self.split == 'train'
+        self.filter_non_overlap = filter_non_overlap and self.split == 'train'# 只限定train，所以不担心test受到这两个参数影响
         self.filter_duplicate_rels = filter_duplicate_rels and self.split == 'train'
         self.transforms = transforms
         self.repeat_dict = None
@@ -95,15 +95,15 @@ class VGDataset(torch.utils.data.Dataset):
         self.categories = {i: self.ind_to_classes[i]
                            for i in range(len(self.ind_to_classes))}
                            
-        self.split_mask, self.gt_boxes, self.gt_classes, self.gt_attributes, self.relationships = load_graphs(
+        self.split_mask, self.gt_boxes, self.gt_classes, self.gt_attributes, self.relationships = load_graphs(#读取h4文件，把gt导入变量中.此时不包括transform和论文中采样method
             self.roidb_file, self.split, num_im, num_val_im=num_val_im,
             filter_empty_rels=False if not cfg.MODEL.RELATION_ON and split == "train" else True,
             filter_non_overlap=self.filter_non_overlap,
         )
 
         self.filenames, self.img_info = load_image_filenames(
-            img_dir, image_file, self.check_img_file)  # length equals to split_mask
-        self.filenames = [self.filenames[i]
+            img_dir, image_file, self.check_img_file)  # length equals to split_mask. filenames包括整个数据集的图片
+        self.filenames = [self.filenames[i]#现在只剩下过滤后的图片了
                           for i in np.where(self.split_mask)[0]]#list:57723. like 'datasets/vg/stanford_spilt/VG_100k_images/498334.jpg'
         self.img_info = [self.img_info[i] for i in np.where(self.split_mask)[0]]
         self.idx_list = list(range(len(self.filenames)))
@@ -122,7 +122,7 @@ class VGDataset(torch.utils.data.Dataset):
             self.logger.info("load pre-compute box length %d" %
                              (len(self.pre_compute_bbox.keys())))
 
-        if cfg.MODEL.ROI_RELATION_HEAD.DATA_RESAMPLING and self.split == 'train':
+        if cfg.MODEL.ROI_RELATION_HEAD.DATA_RESAMPLING and self.split == 'train' and cfg.USE_CLUSTER==False:#USE_CLUSTER代表是否计算整个数据集cluster
             self.resampling_method = cfg.MODEL.ROI_RELATION_HEAD.DATA_RESAMPLING_METHOD
             assert self.resampling_method in ['bilvl', 'lvis']
 
@@ -159,7 +159,7 @@ class VGDataset(torch.utils.data.Dataset):
             print('=' * 20, ' ERROR index ', str(index), ' ', str(img.size), ' ', str(self.img_info[index]['width']),
                   ' ', str(self.img_info[index]['height']), ' ', '=' * 20)
 
-        target = self.get_groundtruth(index, flip_img=False)
+        target = self.get_groundtruth(index, flip_img=False)#flip是假的
         # todo add pre-compute boxes
         pre_compute_boxlist = None
         if self.pre_compute_bbox is not None:
@@ -193,7 +193,7 @@ class VGDataset(torch.utils.data.Dataset):
 
     def get_statistics(self):
         fg_matrix, bg_matrix, rel_counter_init = get_VG_statistics(self,
-                                                 must_overlap=True)
+                                                 must_overlap=False)
         eps = 1e-3
         bg_matrix += 1
         fg_matrix[:, :, 0] = bg_matrix
@@ -532,7 +532,7 @@ def load_graphs(roidb_file, split, num_im, num_val_im, filter_empty_rels, filter
     if filter_empty_rels:
         split_mask &= roi_h5['img_to_first_rel'][:] >= 0
 
-    image_index = np.where(split_mask)[0]
+    image_index = np.where(split_mask)[0]#108073->62723!这是整个数据集大小
     if num_im > -1:
         image_index = image_index[: num_im]
     if num_val_im > 0:
@@ -562,7 +562,7 @@ def load_graphs(roidb_file, split, num_im, num_val_im, filter_empty_rels, filter
 
     # load relation labels
     _relations = roi_h5['relationships'][:]
-    _relation_predicates = roi_h5['predicates'][:, 0]
+    _relation_predicates = roi_h5['predicates'][:, 0]#list of predicate id包括数据集所有的predicate列表
     assert (im_to_first_rel.shape[0] == im_to_last_rel.shape[0])
     assert (_relations.shape[0]
             == _relation_predicates.shape[0])  # sanity check
@@ -572,10 +572,10 @@ def load_graphs(roidb_file, split, num_im, num_val_im, filter_empty_rels, filter
     gt_classes = []
     gt_attributes = []
     relationships = []
-    for i in range(len(image_index)):
+    for i in range(len(image_index)):#此时image_index已经是train的数量了
         i_obj_start = im_to_first_box[i]
         i_obj_end = im_to_last_box[i]
-        i_rel_start = im_to_first_rel[i]
+        i_rel_start = im_to_first_rel[i]#img i的rel起始predicate序号
         i_rel_end = im_to_last_rel[i]
 
         boxes_i = all_boxes[i_obj_start: i_obj_end + 1, :]

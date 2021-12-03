@@ -74,7 +74,8 @@ class CombinedROIHeads(torch.nn.ModuleDict):
             # this makes the API consistent during training and testing
             # with torch.no_grad():
             x, detections, loss_relation = self.relation(features, detections, targets, logger,sampling)#ROIRelationHead:在这里proposal被采样.x:roi_feature[all_prop,4096]. detections:proposal
-            losses.update(loss_relation)#此时Loss还没包含任何内容
+            if loss_relation !=None:#不单独训第一阶段
+                losses.update(loss_relation)#此时Loss还没包含任何内容
 
         return x, detections, losses
 

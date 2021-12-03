@@ -77,6 +77,8 @@ class RelationLossComputation(object):
         if len(torch.nonzero(rel_labels != -1)) == 0:
             loss_relation = None
         else:
+            if all(torch.isfinite(relation_logits))!=True:
+                print('fuck')
             loss_relation = self.criterion_loss(relation_logits[rel_labels != -1],#交叉熵 relation_logits[128,51]
                                                 rel_labels[rel_labels != -1].long())
 
@@ -153,14 +155,16 @@ class FocalLoss(nn.Module):
     def forward(self, input, target):
         target = target.view(-1)
 
-        logpt = F.log_softmax(input,dim=-1)#防止nan
+        logpt = F.log_softmax((input),dim=-1)#防止nan
         logpt = logpt.index_select(-1, target).diag()
         logpt = logpt.view(-1)
         pt = logpt.exp()
 
         logpt = logpt * self.alpha * (target > 0).float() + logpt * (1 - self.alpha) * (target <= 0).float()
-
+        if all(torch.isfinite(logpt)) != True:
+            print('fuck1')
         loss = -1 * (1-pt)**self.gamma * logpt
+
         if self.size_average: return loss.mean()
         else: return loss.sum()
 

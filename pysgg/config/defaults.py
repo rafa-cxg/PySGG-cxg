@@ -24,6 +24,7 @@ _C.DEBUG = False
 _C.GLOBAL_BUFFER_ON = False
 
 _C.EXPERIMENT_NAME = ""
+_C.USE_CLUSTER = False
 
 _C.MODEL = CN()
 _C.MODEL.TWO_STAGE_ON = True

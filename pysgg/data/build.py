@@ -13,6 +13,7 @@ import torch
 import torch.utils.data
 from matplotlib import pyplot as plt
 from tqdm import tqdm
+import torch.distributed as dist
 
 from pysgg.config import cfg
 from pysgg.utils.comm import get_world_size, is_main_process, synchronize
@@ -23,6 +24,9 @@ from . import datasets as D
 from . import samplers
 from .collate_batch import BatchCollator, BBoxAugCollator
 from .transforms import build_transforms
+
+import time
+from pysgg.utils.util_from_deepcluster import AverageMeter
 
 from  multiprocessing import  Pool
 from scipy.stats import wasserstein_distance
@@ -76,6 +80,7 @@ def norm_distribution(prob, num=150,dim=1):
     prob=prob
     prob_weight = prob[:, :num].numpy()
     sum_value = np.sum(prob_weight, keepdims=True, axis=dim)
+
     prob_weight = prob_weight / np.repeat(sum_value, prob_weight.shape[dim], axis=dim)
     return prob_weight
 def plot_distribution_bar(rel_array,data,object=False): #input should be an np array
@@ -190,8 +195,8 @@ def multi_process_stastics(train_idx,train_data,rel_obj_distribution,sub_rel_dis
             obj_rel_distribution[int(r[1])][int(r[2])] += 1
     return  rel_obj_distribution,sub_rel_distribution,obj_rel_distribution,pred_counter
 
-
-def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=False,clustering=True):
+#by cxg
+def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=False,clustering=False):
     """save relation frequency distribution after the sampling etc processing
     the data distribution that model will be trained on it
 
@@ -224,7 +229,10 @@ def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=Fa
             sub_rel_distribution+=part[1]
             obj_rel_distribution += part[2]
             pred_counter+=part[3]
-
+        #归一化
+        sub_rel_distribution=np.concatenate((norm_distribution(sub_rel_distribution[0:,:-1]),sub_rel_distribution[:,-1]),1)
+        obj_rel_distribution =np.concatenate((norm_distribution(obj_rel_distribution[0:,:-1]),obj_rel_distribution[:,-1]),1)
+        rel_obj_distribution = norm_distribution(rel_obj_distribution[0:,0:])
         with open(os.path.join(cfg.OUTPUT_DIR, "pred_counter.pkl"), 'wb') as f:
             pickle.dump(pred_counter, f)
         if record_rel_distribution:
@@ -237,21 +245,20 @@ def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=Fa
         '''sub'''
         with open(os.path.join(cfg.OUTPUT_DIR, "record_sub_distribution.pkl"), 'wb') as f:
             pickle.dump(sub_rel_distribution, f)
-        sub_rel_distribution = sub_rel_distribution.numpy() # (51,151)
         plot_distribution_bar(sub_rel_distribution, train_data,object=True)
         '''obj'''
         with open(os.path.join(cfg.OUTPUT_DIR, "record_obj_distribution.pkl"), 'wb') as f:
             pickle.dump(obj_rel_distribution, f)
-        obj_rel_distribution = obj_rel_distribution.numpy()  # (51,151)
         plot_distribution_bar(obj_rel_distribution, train_data, object=True)
 
         if clustering:
-            rel_obj_distribution_norm=norm_distribution(rel_obj_distribution[1:,1:])
-            Wasserstein_distance_mat=compute_Wasserstein_distance(rel_obj_distribution_norm)
+            # rel_obj_distribution_norm=norm_distribution(rel_obj_distribution[1:,1:])
+            Wasserstein_distance_mat=compute_Wasserstein_distance(rel_obj_distribution[1:,1:])
             kmedoids = KMedoids(n_clusters=3, metric='precomputed', method='pam', init='random', max_iter=100000).fit(
                 Wasserstein_distance_mat)
             predicate2cluster,predicatename2cluster = map_predicate2cluster(train_data, kmedoids.labels_)
             a=1
+
 
 
 
@@ -299,7 +306,47 @@ def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=Fa
         fig.savefig(save_file, dpi=300)
     synchronize()
 
+def compute_features(dataloader, N):
+    device = torch.device(cfg.MODEL.DEVICE)
+    num_gpus = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
+    with open(os.path.join(cfg.OUTPUT_DIR, "record_sub_distribution.pkl"), 'rb') as f1:
+        sub_distribution = torch.tensor(pickle.load(f1)).clone().detach().to('cuda')
+    with open(os.path.join(cfg.OUTPUT_DIR, "record_obj_distribution.pkl"), 'rb') as f2:
+        obj_distribution = torch.tensor(pickle.load(f2)).clone().detach().to('cuda')
+    if dist.get_rank() == 0:
+        print('Compute features')
+    batch_time = AverageMeter()
+    end = time.time()
+    features = []
+    # discard the label information in the dataloader
+    for i, (images, targets, _) in tqdm(enumerate(dataloader),total=int(len(dataloader.dataset)/cfg.SOLVER.IMS_PER_BATCH/num_gpus)):
+        # images = images.to(device)
+        labels =[target.get_field('labels') for target in targets]
+        relation_tuples = [target.get_field('relation_tuple') for target in targets]
+        labels=torch.cat(labels)
+        relation_tuples=torch.cat(relation_tuples)
+        # for label,relation_tuple in zip(labels,relation_tuples):
+        sub=sub_distribution[labels[relation_tuples[:, 0]]]
+        obj = obj_distribution[labels[relation_tuples[:, 1]]]
+        rel = relation_tuples[:, 2].to('cuda').type(dtype=torch.double).unsqueeze(-1)
+        aux=torch.cat((sub,obj,rel),-1)
 
+
+
+        # aux = aux.astype('float32')
+        if i < len(dataloader):
+            features.append(aux) #TODO BATCH是整个还是单个gpu的，值得商榷
+
+
+        # measure elapsed time
+        batch_time.update(time.time() - end)
+        end = time.time()
+
+        if   (i % 200) == 0:
+            print('{0} / {1}\t'
+                  'Time: {batch_time.val:.3f} ({batch_time.avg:.3f})'
+                  .format(i, len(dataloader), batch_time=batch_time))
+    return torch.cat(features,0)
 def build_dataset(cfg, dataset_list, transforms, dataset_catalog, is_train=True):
     """
     Arguments:
@@ -380,7 +427,7 @@ def make_batch_data_sampler(
             aspect_grouping = [aspect_grouping]
         aspect_ratios = _compute_aspect_ratios(dataset)#hight/weight
         group_ids = _quantize(aspect_ratios, aspect_grouping)
-        batch_sampler = samplers.GroupedBatchSampler(
+        batch_sampler = samplers.GroupedBatchSampler(#todo GroupedBatchSampler和IterationBasedBatchSampler区别
             sampler, group_ids, images_per_batch, drop_uneven=False
         )
     else:
@@ -394,7 +441,7 @@ def make_batch_data_sampler(
     return batch_sampler
 
 
-def make_data_loader(cfg, mode='train', is_distributed=False, start_iter=0):
+def make_data_loader(cfg, mode='train', is_distributed=False, start_iter=0,for_cluster=False):#for_cluster代表是否是为cluster做的dataloader
     assert mode in {'train', 'val', 'test'}
     num_gpus = get_world_size()
     is_train = mode == 'train'
@@ -409,6 +456,8 @@ def make_data_loader(cfg, mode='train', is_distributed=False, start_iter=0):
         images_per_gpu = images_per_batch // num_gpus
         shuffle = True
         num_iters = cfg.SOLVER.MAX_ITER
+        if for_cluster==True:
+            num_iters=None
     else:
         images_per_batch = cfg.TEST.IMS_PER_BATCH
         '''cxg'''
@@ -479,6 +528,7 @@ def make_data_loader(cfg, mode='train', is_distributed=False, start_iter=0):
             num_workers=num_workers,
             batch_sampler=batch_sampler,
             collate_fn=collator,
+            pin_memory=True
         )
         data_loaders.append(data_loader)
     if is_train:

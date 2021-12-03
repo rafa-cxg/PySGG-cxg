@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="root@10.193.5.194:9989" remoteFilesAllowedToDisappearOnAutoupload="false">
+  <component name="PublishConfigData" autoUpload="Always" serverName="root@10.193.5.194:10001" remoteFilesAllowedToDisappearOnAutoupload="false">
     <serverData>
-      <paths name="root@10.193.181.222:9989">
+      <paths name="root@10.193.5.194:10001">
         <serverdata>
           <mappings>
-            <mapping deploy="/PySGG-cxg" local="$PROJECT_DIR$" web="/" />
+            <mapping deploy="/root/PySGG-cxg" local="$PROJECT_DIR$" />
           </mappings>
         </serverdata>
       </paths>
-      <paths name="root@10.193.5.194:9989">
+      <paths name="sshConfig://root@10.193.181.222:10001 password/usr/bin/python3.8">
         <serverdata>
           <mappings>
             <mapping deploy="/root/PySGG-cxg" local="$PROJECT_DIR$" />

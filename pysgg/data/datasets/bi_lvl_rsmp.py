@@ -36,7 +36,7 @@ def resampling_dict_generation(dataset, category_list, logger):
                 dataset.drop_rate = cfg.MODEL.ROI_RELATION_HEAD.DATA_RESAMPLING_PARAM.INSTANCE_DROP_RATE
                 logger.info(f"drop rate: {dataset.drop_rate};")
             else:
-                dataset.drop_rate = 0.0
+                dataset.drop_rate = 0.0#todo 0有什么意义？
         else:
             raise NotImplementedError(dataset.resampling_method)
 
@@ -108,7 +108,7 @@ def resampling_dict_generation(dataset, category_list, logger):
 def apply_resampling(index: int, relation: np.ndarray,
                      repeat_dict: Dict, drop_rate):
     """
-
+    这个函数完全是操作的instancesampling而不是图片级别
     Args:
         index:
         relation: N x 3 array
@@ -122,7 +122,7 @@ def apply_resampling(index: int, relation: np.ndarray,
 
     # randomly drop the head and body categories for more balance distribution
     # reduce duplicate head and body for more balances
-    rc_cls = repeat_dict['cls_rf']
+    rc_cls = repeat_dict['cls_rf']#dict of relation repeat times，所有图片都一样的
     r_c = repeat_dict[index]
 
     if r_c > 1:
@@ -130,7 +130,7 @@ def apply_resampling(index: int, relation: np.ndarray,
         # no need repeat this images, just return
 
         selected_rel_idx = []
-        for i, each_rel in enumerate(relation):
+        for i, each_rel in enumerate(relation):#relation是一张图片的
             rel_label = each_rel[-1]
 
             if rc_cls.get(rel_label) is not None:
@@ -144,11 +144,11 @@ def apply_resampling(index: int, relation: np.ndarray,
         if len(selected_rel_idx) > 0:
             selected_head_rel_idx = np.array(selected_rel_idx, dtype=int)
             ignored_rel = np.random.uniform(0, 1, len(selected_head_rel_idx))
-            total_repeat_times = r_c
+            total_repeat_times = r_c#当前图片重复次数
 
-            rel_repeat_time = np.array([rc_cls[rel] for rel in relation[:, -1]])
+            rel_repeat_time = np.array([rc_cls[rel] for rel in relation[:, -1]])#生成该图片所有rel的重复次数
 
-            drop_rate = (1 - (rel_repeat_time / (total_repeat_times + 1e-11) ))  * drop_rate
+            drop_rate = (1 - (rel_repeat_time / (total_repeat_times + 1e-11) ))  * drop_rate#该rel需重复次数越多，drop rate越小，但该图片出现次数越多，drop越大
             # print((1 - (rel_repeat_time / (total_repeat_times + 1e-11))) * 1.5)
             # print(drop_rate)
             ignored_rel = ignored_rel < np.clip(drop_rate, 0.0, 1.0)
@@ -157,7 +157,7 @@ def apply_resampling(index: int, relation: np.ndarray,
             # if len(np.nonzero(ignored_rel == 0)[0]) == 0:
             #     ignored_rel[np.random.randint(0, len(ignored_rel))] = False
             selected_head_rel_idx = np.array(selected_head_rel_idx, dtype=int)
-            relation[selected_head_rel_idx[ignored_rel], -1] = -1
+            relation[selected_head_rel_idx[ignored_rel], -1] = -1#要抛弃的rel被标为-1
 
 
     return relation, relation_non_masked

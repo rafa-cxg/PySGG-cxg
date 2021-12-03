@@ -522,7 +522,7 @@ class BGNNPredictor(nn.Module):
                 num_iter=config.MODEL.ROI_RELATION_HEAD.BGNN_MODULE.GRAPH_ITERATION_NUM,
             )
         else:
-            self.context_layer = BGNNContext(
+            self.context_layer = BGNNContext(#一次get stastic
                 config,
                 self.input_dim,
                 hidden_dim=self.hidden_dim,

@@ -271,7 +271,7 @@ class BGNNContext(nn.Module):
                 "WARNING: the update_step should be greater than 0, current: ",
                 +self.update_step,
             )
-        self.pairwise_feature_extractor = PairwiseFeatureExtractor(cfg, in_channels)
+        self.pairwise_feature_extractor = PairwiseFeatureExtractor(cfg, in_channels)#一次get stastic
         self.pooling_dim = self.pairwise_feature_extractor.pooling_dim
 
         self.rel_aware_on = (

@@ -229,7 +229,7 @@ class Two_Stage_Head(torch.nn.Module):
             obj_rep = cat((roi_features, obj_embed_by_pred_dist, pos_embed), -1)  # 4096,200,128.->4424
         else:#纯语义特征
             roi_features=None
-            obj_rep=self.pure_senmatic_feature(proposals, rel_pair_idxs)#1024
+            obj_rep=self.pure_senmatic_feature(proposals, rel_pair_idxs)#2560
 
 
         if self.cfg.MODEL.TWO_STAGE_HEAD.INDIVIDUAL_BOX:
@@ -239,7 +239,7 @@ class Two_Stage_Head(torch.nn.Module):
             gt_rel_binarys_matrix = None
 
             if targets is not None:
-                fg_pair_matrixs, gt_rel_binarys_matrix = gt_rel_proposal_matching(
+                fg_pair_matrixs, gt_rel_binarys_matrix = gt_rel_proposal_matching(#prop中可以和gt对应上的matrix
                     proposals,#predcls:除对角线，全是1
                     targets,
                     self.cfg.MODEL.ROI_HEADS.FG_IOU_THRESHOLD,#0.5
@@ -325,15 +325,21 @@ class  make_pure_senmatic_feature(torch.nn.Module):
             self.sub_distribution= torch.tensor(pickle.load(f1)).clone().detach()
         with open(os.path.join(self.cfg.OUTPUT_DIR, "record_obj_distribution.pkl"), 'rb') as f2:
             self.obj_distribution= torch.tensor(pickle.load(f2)).clone().detach()
+        self.sub_embed = nn.Sequential(
+            *[
+                make_fc(51, 1024),
+                nn.ReLU(inplace=True),
+            ]
+        )
         self.obj_embed=nn.Sequential(
             *[
-                make_fc(51*2,256),
+                make_fc(51,1024),
                 nn.ReLU(inplace=True),
             ]
         )
         self.interact_embed = nn.Sequential(
             *[
-                make_fc(2, 128),
+                make_fc(2, 512),
                 nn.ReLU(inplace=True),
             ]
         )
@@ -348,10 +354,12 @@ class  make_pure_senmatic_feature(torch.nn.Module):
         # sub_embed =torch.cat(sub_embed).cuda()
         # obj_embed =torch.cat(obj_embed).cuda()
         for image,rel_pair_idx in enumerate(rel_pair_idxs):
+
             sub_embed.append(self.sub_distribution[proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 0]]])
             obj_embed.append(self.obj_distribution[proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 1]]])
-        sub_embed =torch.cat(sub_embed).cuda()
-        obj_embed =torch.cat(obj_embed).cuda()
-        return  torch.cat((self.obj_embed(torch.cat((sub_embed,obj_embed),-1).type(torch.cuda.FloatTensor)),interact_embed),dim=-1)
+        sub_embed =self.sub_embed(torch.cat(sub_embed).cuda().type(torch.cuda.FloatTensor))
+        obj_embed =self.obj_embed(torch.cat(obj_embed).cuda().type(torch.cuda.FloatTensor))
+
+        return  torch.cat((torch.cat((sub_embed,obj_embed),-1),interact_embed),dim=-1)
 
 

@@ -18,6 +18,8 @@ import gpustat
 import numpy as np
 import torch
 from tqdm import tqdm
+import pickle
+import torch.multiprocessing as mp
 
 from pysgg.config.defaults import  _C as cfg
 from pysgg.data import make_data_loader
@@ -35,6 +37,11 @@ from pysgg.utils.logger import setup_logger, debug_print, TFBoardHandler_LEVEL
 from pysgg.utils.metric_logger import MetricLogger
 from pysgg.utils.miscellaneous import mkdir, save_config
 from pysgg.utils.global_buffer import save_buffer
+from pysgg.data.build import compute_features
+import torch.distributed as dist
+from pysgg.utils.comm import all_gather
+
+from clustering import  clustering
 
 # See if we can use apex.DistributedDataParallel instead of the torch default,
 # and enable mixed-precision via apex.amp
@@ -291,7 +298,10 @@ def train(
         checkpoint=checkpointer.load(
             cfg.MODEL.PRETRAINED_DETECTOR_CKPT, with_optim=False,update_schedule=False , load_mapping=load_mapping
         )
-        arguments["iteration"] =checkpoint["iteration"]
+        if cfg.MODEL.PRETRAINED_DETECTOR_CKPT=='checkpoints/detection/pretrained_faster_rcnn/vg_faster_det.pth':#如果从detection模型开始训练，起始Iter应设置0
+            arguments["iteration"]=0
+        else:
+            arguments["iteration"] =checkpoint["iteration"]
         del checkpoint
     else:
         checkpointer.load(
@@ -312,7 +322,13 @@ def train(
 
     debug_print(logger, "Start initializing dataset & dataloader")
 
-
+    cluster_data_loader = make_data_loader(
+        cfg,
+        mode="train",
+        is_distributed=distributed,
+        start_iter=0,
+        for_cluster=True
+    )
 
     train_data_loader = make_data_loader(
         cfg,
@@ -366,10 +382,23 @@ def train(
     start_iter = arguments["iteration"]
     start_training_time = time.time()
     end = time.time()
-
     model.train()
-
     print_first_grad = True
+    if cfg.USE_CLUSTER==True:
+        if os.path.isfile(cfg.OUTPUT_DIR+'/cluster_on_dataset.pkl')==False:#存放数据集Instance的feature文件
+            feature=compute_features(cluster_data_loader,len(cluster_data_loader.dataset))
+            synchronize()
+            size_list = [torch.LongTensor([0]).to(device) for _ in range(int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1)]
+            feature=all_gather(feature)
+            feature=torch.cat(feature,0)
+            with open(os.path.join(cfg.OUTPUT_DIR, "cluster_on_dataset.pkl"), 'wb') as f:
+                pickle.dump(feature, f)
+        else:
+            with open(os.path.join(cfg.OUTPUT_DIR, "cluster_on_dataset.pkl"), 'rb') as f:
+                feature=pickle.load(f)
+        #clustering algorithm to use
+        deepcluster = clustering.__dict__['Kmeans'](3)
+        clustering_loss = deepcluster.cluster(feature.to('cpu').numpy())
     for iteration, (images, targets, _) in (enumerate(train_data_loader, start_iter)):
         torch.cuda.empty_cache()
         if any(len(target) < 1 for target in targets):
@@ -660,6 +689,7 @@ def main():
         default=None,
         nargs=argparse.REMAINDER,
     )
+    parser.add_argument('--clustering', type=str, choices=['Kmeans', 'PIC'], default='Kmeans')
 
     args = parser.parse_args()
 
@@ -727,5 +757,6 @@ def main():
 
 if __name__ == "__main__":
     os.environ["OMP_NUM_THREADS"] = "8"
+
 
     main()

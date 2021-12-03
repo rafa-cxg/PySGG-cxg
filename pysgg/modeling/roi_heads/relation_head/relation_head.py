@@ -272,35 +272,37 @@ class ROIRelationHead(torch.nn.Module):
             )
 
             return roi_features, result, {}
-
-        loss_relation, loss_refine = self.loss_evaluator(#RelationLossComputation loss_refine指的是object的loss
-            proposals, rel_labels, relation_logits, obj_refine_logits
-        )
-
-        output_losses = dict()
-        if self.cfg.MODEL.ATTRIBUTE_ON and isinstance(loss_refine, (list, tuple)):
-            output_losses = dict(
-                loss_rel=loss_relation,
-                loss_refine_obj=loss_refine[0],
-                loss_refine_att=loss_refine[1],
+        if self.cfg.MODEL.TRAIN_FIRST_STAGE_ONLY == False:#是否单训第一阶段
+            loss_relation, loss_refine = self.loss_evaluator(#RelationLossComputation loss_refine指的是object的loss
+                proposals, rel_labels, relation_logits, obj_refine_logits
             )
-        else:
-            if self.pass_obj_recls_loss:#predcls:false output_losses:{}
-                output_losses = dict(loss_rel=loss_relation, loss_refine_obj=loss_refine)
-            else:#default
-                output_losses = dict(loss_rel=loss_relation)
 
-        if rel_pn_loss is not None:
-            output_losses["loss_relatedness"] = rel_pn_loss
+            output_losses = dict()
+            if self.cfg.MODEL.ATTRIBUTE_ON and isinstance(loss_refine, (list, tuple)):
+                output_losses = dict(
+                    loss_rel=loss_relation,
+                    loss_refine_obj=loss_refine[0],
+                    loss_refine_att=loss_refine[1],
+                )
+            else:
+                if self.pass_obj_recls_loss:#predcls:false output_losses:{}
+                    output_losses = dict(loss_rel=loss_relation, loss_refine_obj=loss_refine)
+                else:#default
+                    output_losses = dict(loss_rel=loss_relation)
 
-        output_losses.update(add_losses)#有rel的loss,也有4个iter的rel loss， 包括loss_rel和3个iter loss('pre_rel_classify_loss_iter-0'):属于rel_proposal_network部分
-        output_losses_checked = {}#check whether loss is none
-        if self.training:
-            for key in output_losses.keys():
-                if output_losses[key] is not None:
-                    if output_losses[key].grad_fn is not None:
-                        output_losses_checked[key] = output_losses[key]
-        output_losses = output_losses_checked
+            if rel_pn_loss is not None:
+                output_losses["loss_relatedness"] = rel_pn_loss
+
+            output_losses.update(add_losses)#有rel的loss,也有4个iter的rel loss， 包括loss_rel和3个iter loss('pre_rel_classify_loss_iter-0'):属于rel_proposal_network部分
+            output_losses_checked = {}#check whether loss is none
+            if self.training:
+                for key in output_losses.keys():
+                    if output_losses[key] is not None:
+                        if output_losses[key].grad_fn is not None:
+                            output_losses_checked[key] = output_losses[key]
+            output_losses = output_losses_checked
+
+        else: output_losses=None
         return roi_features, proposals, output_losses#roi_features:[num_all_prop,4096]
 
 

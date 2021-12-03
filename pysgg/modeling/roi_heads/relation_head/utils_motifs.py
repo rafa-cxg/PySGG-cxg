@@ -151,8 +151,7 @@ def encode_box_info(proposals):
     return torch.cat(boxes_info, dim=0)
 def encode_rel_box_info(proposals,rel_pair_idxs):#todo 和上面的函数有很多重叠运算需要优化
     """
-    encode proposed box information (x1, y1, x2, y2) to
-    (cx/wid, cy/hei, w/wid, h/hei, x1/wid, y1/hei, x2/wid, y2/hei, wh/wid*hei)
+
     """
     assert proposals[0].mode == 'xyxy'
     boxes_info = []
