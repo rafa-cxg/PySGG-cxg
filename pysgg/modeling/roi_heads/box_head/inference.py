@@ -171,10 +171,10 @@ class PostProcessor(nn.Module):
         # Skip j = 0, because it's the background class
         inds_all = scores > self.score_thresh#scores： torch.Size([1020, 151])
         for j in range(1, num_classes):
-            inds = inds_all[:, j].nonzero().squeeze(1)#一张图中所有proposal，150个class的score大于阈值的编号
+            inds = inds_all[:, j].nonzero().squeeze(1)#一张图中所有proposal(1000个)，150个class的score大于阈值的编号
             scores_j = scores[inds, j]
             boxes_j = boxes[inds, j * 4: (j + 1) * 4]
-            boxlist_for_class = BoxList(boxes_j, boxlist.size, mode="xyxy")
+            boxlist_for_class = BoxList(boxes_j, boxlist.size, mode="xyxy")#由符合这个class的prop组成的boxlist
             boxlist_for_class.add_field("pred_scores", scores_j)
             boxlist_for_class, keep = boxlist_nms(
                 boxlist_for_class, self.nms, max_proposals=self.post_nms_per_cls_topn, score_field='pred_scores'#self.nms=0.3,self.post_nms_per_cls_topn=300
@@ -182,22 +182,22 @@ class PostProcessor(nn.Module):
             inds = inds[keep]
             num_labels = len(boxlist_for_class)
             boxlist_for_class.add_field(
-                "pred_labels", torch.full((num_labels,), j, dtype=torch.int64, device=device)
+                "pred_labels", torch.full((num_labels,), j, dtype=torch.int64, device=device)#在这，sgdet给prop分配label，虽然label必然不是背景，但没有大于阈值的类别，就是空list
             )
-            result.append(boxlist_for_class)
-            orig_inds.append(inds)
+            result.append(boxlist_for_class)#self.nms_filter_duplicates要是true, result就被覆盖了
+            orig_inds.append(inds)#orig_inds里面元素个数和obj class一致
 
         # NOTE: kaihua, according to Neural-MOTIFS (and my experiments, we need remove duplicate bbox)
         if self.nms_filter_duplicates or self.save_proposals:
             assert len(orig_inds) == (num_classes - 1)
             # set all bg to zero
-            inds_all[:, 0] = 0 # inds_all[:, 0]代表该proposal是bg的score
+            inds_all[:, 0] = 0 # 将符合阈值的bg位置也设置为0
             for j in range(1, num_classes):#因为有些inds_all不为false的框，并不存在于nms之后，所以用orig_inds清洗
                 inds_all[:, j] = 0
-                orig_idx = orig_inds[j - 1]# -1因为是从1开始
-                inds_all[orig_idx, j] = 1
+                orig_idx = orig_inds[j - 1]# -1因为是从1开始，orig_inds一共就150个元素
+                inds_all[orig_idx, j] = 1#此时任然有可能多个,但只保留了nms之后的
             dist_scores = scores * inds_all.float()
-            scores_pre, labels_pre = dist_scores.max(1)
+            scores_pre, labels_pre = dist_scores.max(1)#todo 这里的预测label也必然不会是bg,这合适吗？
             final_inds = scores_pre.nonzero()#nms后仍有可能是正确的proposal编号
             assert final_inds.dim() != 0
             final_inds = final_inds.squeeze(1)

@@ -151,7 +151,7 @@ class SGRecall(SceneGraphEvaluation):
 
         pred_rels = np.column_stack((pred_rel_inds, 1 + rel_scores[:, 1:].argmax(1)))#[4096,3],最后一个元素是rel_label,如果是predcls:[num_box!,3]
         pred_2stage_rels = np.column_stack((pred_2stage_rel_inds, 1 + pred_2stage_scores[:, 1:].argmax(1)))
-        pred_scores = rel_scores[:, 1:].max(1)#todo 为什么排除background?
+        pred_scores = rel_scores[:, 1:].max(1)#todo 为什么排除background? 因为不存在真正意义的no relation吧
 
         pred_2stage_scores = pred_2stage_scores[:, 1:].max(1)
         '''gt_rels:[num_rel,3],gt_classes[num_box,],gt_boxes:[num_box,4]'''
@@ -162,7 +162,6 @@ class SGRecall(SceneGraphEvaluation):
         local_container["gt_triplet_boxes"] = gt_triplet_boxes
         # local_container["gt_2stage_triplets"] = gt_2stage_triplets
 
-        # 我提前再调用一次_triblet,里面pred_rel提前用pred_rel_inds和预测值结合一下代替，包括得分也要根据分该
         pred_triplets, pred_triplet_boxes, pred_triplet_scores = _triplet(#pred_triplet_scores:sub\pred\obj score
             pred_rels, pred_classes, pred_boxes, pred_scores, obj_scores
         )

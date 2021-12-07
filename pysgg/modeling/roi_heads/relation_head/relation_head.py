@@ -105,7 +105,7 @@ class ROIRelationHead(torch.nn.Module):
             if self.rel_prop_type == "pre_clser":
                 self.use_same_label_with_clser == cfg.MODEL.ROI_RELATION_HEAD.RELATION_PROPOSAL_MODEL.USE_SAME_LABEL_WITH_CLSER
 
-    def forward(self, features, proposals, targets=None, logger=None,*kwargs):
+    def forward(self, features, proposal, targets=None, logger=None,**kwargs):
         """
         Arguments:
             features (list[Tensor]): feature-maps from possibly several levels
@@ -124,41 +124,51 @@ class ROIRelationHead(torch.nn.Module):
             # relation subsamples and assign ground truth label during training
             with torch.no_grad():
                 if self.cfg.MODEL.ROI_RELATION_HEAD.USE_GT_BOX: #precls
-                    # (#return的都是list:num_image
-                    #     proposals,#[num_prop]
-                    #     rel_labels,#[num_prop*(num_prop-1)]
-                    #     rel_pair_idxs,#[num_prop*(num_prop-1),2]
-                    #     gt_rel_binarys_matrix,#[num_prop,num_prop]
-                    # ) = self.samp_processor.gtbox_relsample(proposals, targets)#boxlist:num_image,对于predcls,proposals数目=targets
-                    if self.cfg.MODEL.TWO_STAGE_HEAD.UNION_BOX:
-                        proposals,rel_labels,rel_pair_idxs,gt_rel_binarys_matrix,_,_=kwargs[0].values()
+                    if kwargs=={}:#代表不用teostage
+                        (#return的都是list:num_image
+                            proposals,#[num_prop]
+                            rel_labels,#[num_prop*(num_prop-1)]
+                            rel_pair_idxs,#[num_prop*(num_prop-1),2]
+                            gt_rel_binarys_matrix,#[num_prop,num_prop]
+                        ) = self.samp_processor.gtbox_relsample(proposal, targets)#boxlist:num_image,对于predcls,proposals数目=targets
                     else:
-                        proposals=kwargs[0].get('proposals'); rel_labels=kwargs[0].get('rel_labels'); rel_pair_idxs=kwargs[0].get('rel_pair_idxs')
-                        gt_rel_binarys_matrix=kwargs[0].get('gt_rel_binarys_matrix')
-                    rel_labels_all = rel_labels 
+                        if self.cfg.MODEL.TWO_STAGE_HEAD.UNION_BOX:
+                            proposals,rel_labels,rel_pair_idxs,gt_rel_binarys_matrix,_,_=kwargs.values()
+                        else:
+                            proposals=kwargs['detections']; rel_labels=kwargs['rel_labels']; rel_pair_idxs=kwargs['rel_pair_idxs']
+                            gt_rel_binarys_matrix=kwargs['gt_rel_binarys_matrix']
+                        rel_labels_all = rel_labels
                 else:
-                    # (
-                    #     proposals,
-                    #     rel_labels,
-                    #     rel_labels_all,
-                    #     rel_pair_idxs,
-                    #     gt_rel_binarys_matrix,
-                    # ) = self.samp_processor.detect_relsample(proposals, targets)
-                    if self.cfg.MODEL.TWO_STAGE_HEAD.UNION_BOX:
-                        proposals, rel_labels,rel_labels_all, rel_pair_idxs, gt_rel_binarys_matrix,_,_ = kwargs[0].values()
+                    if kwargs == {}:  # 代表不用teostage
+                        (
+                            proposals,
+                            rel_labels,
+                            rel_labels_all,
+                            rel_pair_idxs,
+                            gt_rel_binarys_matrix,
+                        ) = self.samp_processor.detect_relsample(proposal, targets)
                     else:
-                        proposals, rel_labels, rel_pair_idxs, gt_rel_binarys_matrix = kwargs[0].values()
+                        if self.cfg.MODEL.TWO_STAGE_HEAD.UNION_BOX:
+                            proposals, rel_labels,rel_labels_all, rel_pair_idxs, gt_rel_binarys_matrix,_,_ = kwargs.values()
+                        else:
+                            proposals, rel_labels, rel_pair_idxs, gt_rel_binarys_matrix = kwargs.values()
         else:
-            # rel_labels, rel_labels_all, gt_rel_binarys_matrix = None, None, None
-            # rel_pair_idxs = self.samp_processor.prepare_test_pairs(#不超过设定的max relation数，就全部保留
-            #     features[0].device, proposals
-            # )
-            proposals=kwargs[0].get('proposals'); rel_labels=kwargs[0].get('rel_labels'); rel_labels_all=kwargs[0].get('rel_labels_all')
-            rel_pair_idxs=kwargs[0].get('rel_pair_idxs');gt_rel_binarys_matrix=kwargs[0].get('gt_rel_binarys_matrix')
+            rel_labels, rel_labels_all, gt_rel_binarys_matrix = None, None, None
+            if kwargs == {}:  # 代表不用teostage
+                rel_pair_idxs = self.samp_processor.prepare_test_pairs(#不超过设定的max relation数，就全部保留
+                    features[0].device, proposal
+                )
+            else:
+                proposals=kwargs['proposals']
+                rel_pair_idxs=kwargs['rel_pair_idxs']
 
         if self.mode == "predcls":
             # overload the pred logits by the gt label
             # gt_2stage=0
+            if kwargs!= {}:
+                rel_labels = kwargs['rel_labels']
+                rel_labels_all = kwargs['rel_labels_all']
+                gt_rel_binarys_matrix = kwargs['gt_rel_binarys_matrix']
             device = features[0].device
             for proposal in proposals:
                 obj_labels = proposal.get_field("labels")
@@ -188,7 +198,7 @@ class ROIRelationHead(torch.nn.Module):
                 gt_rel_binarys_matrix = [each.float().cuda() for each in gt_rel_binarys_matrix]
 
 
-            if self.rel_prop_type == "rel_pn":#rel proposal network . rel_prop_type=relawarefeature DEFAULT: FALSE
+            if self.rel_prop_type == "rel_pn":#rel proposal network . rel_prop_type=relawarefeature DEFAULT: FALSE#todo 确认rel_pn只能用在predcls中
                 relness_matrix, rel_pn_loss = self.rel_pn(
                     proposals,
                     roi_features,
@@ -247,7 +257,7 @@ class ROIRelationHead(torch.nn.Module):
                 predicate2cluster = json.load(f)
             # sactter_two_stage_logits_batch = []
             for idx, proposal in enumerate(proposals):
-                sactter_two_stage_logits = torch.zeros(proposal.get_field('two_stage_pred_rel_logits').size(0),self.cfg.MODEL.ROI_RELATION_HEAD.NUM_CLASSES).float().to(device)
+                sactter_two_stage_logits = torch.zeros(proposal.get_field('two_stage_pred_rel_logits').size(0),self.cfg.MODEL.ROI_RELATION_HEAD.NUM_CLASSES).float().to('cuda')
 
                 for key, value in predicate2cluster.items():
                     sactter_two_stage_logits[:, [int(i) for i in value]] = proposal.get_field(
@@ -265,11 +275,14 @@ class ROIRelationHead(torch.nn.Module):
             if not self.object_cls_refine:
                 # if don't use object classification refine, we just use the initial logits
                 obj_refine_logits = [prop.get_field("predict_logits") for prop in proposals]
-            two_stage_pred_rel_logits = [prop.get_field("two_stage_pred_rel_logits") for prop in proposals]
+            if kwargs!={}:
+                two_stage_pred_rel_logits = [prop.get_field("two_stage_pred_rel_logits") for prop in proposals]
+            else: two_stage_pred_rel_logits=[None for prop in proposals]
             '''post_processor只在test时期采用'''
             result = self.post_processor(#result包括extra_fields和box
                 (relation_logits, obj_refine_logits,two_stage_pred_rel_logits), rel_pair_idxs, proposals
             )
+
 
             return roi_features, result, {}
         if self.cfg.MODEL.TRAIN_FIRST_STAGE_ONLY == False:#是否单训第一阶段

@@ -213,9 +213,10 @@ class Two_Stage_Head(torch.nn.Module):
             )
             sampling = dict(proposals=proposals, rel_labels=rel_labels,rel_labels_all=rel_labels_all,
                             rel_pair_idxs=rel_pair_idxs, gt_rel_binarys_matrix=gt_rel_binarys_matrix)
-
-        embed = env_pos_rel_box_info(proposals, rel_pair_idxs)#这是transformer位置编码
-        sampling.update(embed=embed)
+        #todo sgdet的memory不够用，先注释
+        # embed = env_pos_rel_box_info(proposals, rel_pair_idxs)#这是transformer位置编码
+        # sampling.update(embed=embed)
+        embed=None
 
         if self.mode \
                 == "predcls":
@@ -343,6 +344,14 @@ class  make_pure_senmatic_feature(torch.nn.Module):
                 nn.ReLU(inplace=True),
             ]
         )
+        # mode
+        if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_BOX:
+            if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL:
+                self.mode = "predcls"
+            else:
+                self.mode = "sgcls"
+        else:
+            self.mode = "sgdet"
 
     def forward(self,proposals,rel_pair_idxs):
         interact_embed = self.interact_embed(encode_rel_box_info(proposals, rel_pair_idxs))
@@ -354,9 +363,13 @@ class  make_pure_senmatic_feature(torch.nn.Module):
         # sub_embed =torch.cat(sub_embed).cuda()
         # obj_embed =torch.cat(obj_embed).cuda()
         for image,rel_pair_idx in enumerate(rel_pair_idxs):
-
-            sub_embed.append(self.sub_distribution[proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 0]]])
-            obj_embed.append(self.obj_distribution[proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 1]]])
+            if self.mode=='predcls':
+                sub_embed.append(self.sub_distribution[proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 0]]])
+                obj_embed.append(self.obj_distribution[proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 1]]])
+            else:
+                # label=torch.argmax(proposals[image].get_field('predict_logits'),-1)
+                sub_embed.append(self.sub_distribution[proposals[image].get_field('pred_labels').type(torch.LongTensor)[rel_pair_idx[:, 0]]])
+                obj_embed.append(self.obj_distribution[proposals[image].get_field('pred_labels').type(torch.LongTensor)[rel_pair_idx[:, 1]]])
         sub_embed =self.sub_embed(torch.cat(sub_embed).cuda().type(torch.cuda.FloatTensor))
         obj_embed =self.obj_embed(torch.cat(obj_embed).cuda().type(torch.cuda.FloatTensor))
 

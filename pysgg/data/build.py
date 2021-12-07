@@ -230,8 +230,8 @@ def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=Fa
             obj_rel_distribution += part[2]
             pred_counter+=part[3]
         #归一化
-        sub_rel_distribution=np.concatenate((norm_distribution(sub_rel_distribution[0:,:-1]),sub_rel_distribution[:,-1]),1)
-        obj_rel_distribution =np.concatenate((norm_distribution(obj_rel_distribution[0:,:-1]),obj_rel_distribution[:,-1]),1)
+        sub_rel_distribution=norm_distribution(sub_rel_distribution)
+        obj_rel_distribution =norm_distribution(obj_rel_distribution)
         rel_obj_distribution = norm_distribution(rel_obj_distribution[0:,0:])
         with open(os.path.join(cfg.OUTPUT_DIR, "pred_counter.pkl"), 'wb') as f:
             pickle.dump(pred_counter, f)
@@ -376,7 +376,7 @@ def build_dataset(cfg, dataset_list, transforms, dataset_catalog, is_train=True)
         # make dataset from factory
         # print("build dataset with args:")
         # pprint(args)
-        dataset = factory(**args)#通过arg提供vgddataset参数
+        dataset = factory(**args)#通过arg提供vgdataset参数
         datasets.append(dataset)
 
     # for testing, return a list of datasets

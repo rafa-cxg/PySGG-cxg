@@ -101,7 +101,7 @@ class PostProcessor(nn.Module):
                 obj_pred = obj_pred + 1
             else:
                 # NOTE: by kaihua, apply late nms for object prediction
-                obj_pred = obj_prediction_nms(box.get_field('boxes_per_cls'), obj_logit, self.later_nms_pred_thres)
+                obj_pred = obj_prediction_nms(box.get_field('boxes_per_cls'), obj_logit, self.later_nms_pred_thres)#这nms什么操作看不懂，它算了新的所有prop的概率，不符合赋值-1，但却没用它
                 # obj_pred = box.get_field('pred_labels')
                 obj_score_ind = torch.arange(num_obj_bbox, device=obj_logit.device) * num_obj_class + obj_pred
                 obj_scores = obj_class_prob.view(-1)[obj_score_ind]
@@ -120,7 +120,7 @@ class PostProcessor(nn.Module):
                 boxlist = BoxList(
                     box.get_field('boxes_per_cls')[torch.arange(boxes_num, device=device), regressed_box_idxs],
                     box.size, 'xyxy')
-            boxlist.add_field('pred_labels', obj_class)  # (#obj, )
+            boxlist.add_field('pred_labels', obj_class)  # (#obj, )不可能有bg,不同mode只是，多个nms计算
             boxlist.add_field('pred_scores', obj_scores)  # (#obj, )
 
             if self.attribute_on:
@@ -133,9 +133,10 @@ class PostProcessor(nn.Module):
             rel_scores, rel_class = rel_class_prob[:, 1:].max(dim=1)
             rel_class = rel_class + 1
             '''2 stage'''
-            rel_2stage_class_prob = F.softmax(two_stage_pred_rel_logit, -1)
-            rel_2stage_scores, rel_2stage_class = rel_2stage_class_prob[:, 1:].max(dim=1)
-            rel_2stage_class = rel_2stage_class + 1
+            if two_stage_pred_rel_logit!=None:
+                rel_2stage_class_prob = F.softmax(two_stage_pred_rel_logit, -1)
+                rel_2stage_scores, rel_2stage_class = rel_2stage_class_prob[:, 1:].max(dim=1)
+                rel_2stage_class = rel_2stage_class + 1
 
             if rel_binarys_matrix is not None:
                 rel_bin_mat = rel_binarys_matrix[i]
@@ -144,19 +145,22 @@ class PostProcessor(nn.Module):
             # TODO Kaihua: how about using weighted some here?  e.g. rel*1 + obj *0.8 + obj*0.8
             if self.use_relness_ranking:
                 triple_scores = rel_scores * obj_scores0 * obj_scores1 * relness
-                triple_2stage_scores = rel_2stage_scores * obj_scores0 * obj_scores1 * relness
+                if two_stage_pred_rel_logit!=None:
+                    triple_2stage_scores = rel_2stage_scores * obj_scores0 * obj_scores1 * relness
             else:
                 triple_scores = rel_scores * obj_scores0 * obj_scores1#不用rel_pn的情况下，rel的可能性就以50类中最大值当作rel_scores
-                triple_2stage_scores = rel_2stage_scores * obj_scores0 * obj_scores1
+                if two_stage_pred_rel_logit!=None:
+                    triple_2stage_scores = rel_2stage_scores * obj_scores0 * obj_scores1
             _, sorting_idx = torch.sort(triple_scores.view(-1), dim=0, descending=True)
             rel_pair_idx = rel_pair_idx[sorting_idx]
             rel_class_prob = rel_class_prob[sorting_idx]
             rel_labels = rel_class[sorting_idx]
             '''2 stage'''
-            _, sorting_2stage_idx = torch.sort(triple_2stage_scores.view(-1), dim=0, descending=True)
-            rel_2stage_pair_idx = rel_pair_idx[sorting_2stage_idx]
-            rel_2stage_class_prob = rel_2stage_class_prob[sorting_2stage_idx]
-            rel_2stage_labels = rel_2stage_class[sorting_2stage_idx]
+            if two_stage_pred_rel_logit != None:
+                _, sorting_2stage_idx = torch.sort(triple_2stage_scores.view(-1), dim=0, descending=True)
+                rel_2stage_pair_idx = rel_pair_idx[sorting_2stage_idx]
+                rel_2stage_class_prob = rel_2stage_class_prob[sorting_2stage_idx]
+                rel_2stage_labels = rel_2stage_class[sorting_2stage_idx]
 
 
 
@@ -166,9 +170,11 @@ class PostProcessor(nn.Module):
             boxlist.add_field('rel_pair_idxs', rel_pair_idx)  # (#rel, 2)
             boxlist.add_field('pred_rel_scores', rel_class_prob)  # (#rel, #rel_class)
             boxlist.add_field('pred_rel_labels', rel_labels)  # (#rel, )
-            boxlist.add_field('rel_2stage_pair_idx', rel_2stage_pair_idx)
-            boxlist.add_field('two_stage_pred_rel_prob', rel_2stage_class_prob)
-            boxlist.add_field('pred_2stage_labels', rel_2stage_labels)
+
+            if two_stage_pred_rel_logit != None:
+                boxlist.add_field('two_stage_pred_rel_prob', rel_2stage_class_prob)
+                boxlist.add_field('rel_2stage_pair_idx', rel_2stage_pair_idx)
+                boxlist.add_field('pred_2stage_labels', rel_2stage_labels)
             # should have fields : rel_pair_idxs, pred_rel_class_prob, pred_rel_labels, pred_labels, pred_scores
             # Note
             # TODO Kaihua: add a new type of element,

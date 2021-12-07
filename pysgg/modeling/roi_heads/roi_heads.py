@@ -73,7 +73,9 @@ class CombinedROIHeads(torch.nn.ModuleDict):
             # During training, self.box() will return the unaltered proposals as "detections"
             # this makes the API consistent during training and testing
             # with torch.no_grad():
-            x, detections, loss_relation = self.relation(features, detections, targets, logger,sampling)#ROIRelationHead:在这里proposal被采样.x:roi_feature[all_prop,4096]. detections:proposal
+            if self.cfg.MODEL.TWO_STAGE_ON==False:
+                sampling={}
+            x, detections, loss_relation = self.relation(features=features, proposal=detections, targets=targets, logger=logger,**sampling)#ROIRelationHead:在这里proposal被采样.x:roi_feature[all_prop,4096]. detections:proposal
             if loss_relation !=None:#不单独训第一阶段
                 losses.update(loss_relation)#此时Loss还没包含任何内容
 

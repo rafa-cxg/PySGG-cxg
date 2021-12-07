@@ -1,6 +1,8 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 import cv2
+import json
 import torch
+from torch import nn
 from torchvision import transforms as T
 from torchvision.transforms import functional as F
 
@@ -45,95 +47,103 @@ class Resize(object):
         image = F.resize(image, size)
         return image
 class COCODemo(object):
+    vocab_file = json.load(open('datasets/vg/VG-SGG-dicts-with-attri.json'))
+    idx2obj = vocab_file['idx_to_label']
+    CATEGORIES =[i for i in idx2obj.values()]
+    CATEGORIES.insert(0,"__background")
+    '''predicate的catgories'''
+    idx2pre = vocab_file['idx_to_predicate']
+    PRE_CATEGORIES = [i for i in idx2pre.values()]
+    PRE_CATEGORIES.insert(0, "__background")
     # COCO categories for pretty print
-    CATEGORIES = [
-        "__background",
-        "person",
-        "bicycle",
-        "car",
-        "motorcycle",
-        "airplane",
-        "bus",
-        "train",
-        "truck",
-        "boat",
-        "traffic light",
-        "fire hydrant",
-        "stop sign",
-        "parking meter",
-        "bench",
-        "bird",
-        "cat",
-        "dog",
-        "horse",
-        "sheep",
-        "cow",
-        "elephant",
-        "bear",
-        "zebra",
-        "giraffe",
-        "backpack",
-        "umbrella",
-        "handbag",
-        "tie",
-        "suitcase",
-        "frisbee",
-        "skis",
-        "snowboard",
-        "sports ball",
-        "kite",
-        "baseball bat",
-        "baseball glove",
-        "skateboard",
-        "surfboard",
-        "tennis racket",
-        "bottle",
-        "wine glass",
-        "cup",
-        "fork",
-        "knife",
-        "spoon",
-        "bowl",
-        "banana",
-        "apple",
-        "sandwich",
-        "orange",
-        "broccoli",
-        "carrot",
-        "hot dog",
-        "pizza",
-        "donut",
-        "cake",
-        "chair",
-        "couch",
-        "potted plant",
-        "bed",
-        "dining table",
-        "toilet",
-        "tv",
-        "laptop",
-        "mouse",
-        "remote",
-        "keyboard",
-        "cell phone",
-        "microwave",
-        "oven",
-        "toaster",
-        "sink",
-        "refrigerator",
-        "book",
-        "clock",
-        "vase",
-        "scissors",
-        "teddy bear",
-        "hair drier",
-        "toothbrush",
-    ]
+    # CATEGORIES = [
+    #     "__background",
+    #     "person",
+    #     "bicycle",
+    #     "car",
+    #     "motorcycle",
+    #     "airplane",
+    #     "bus",
+    #     "train",
+    #     "truck",
+    #     "boat",
+    #     "traffic light",
+    #     "fire hydrant",
+    #     "stop sign",
+    #     "parking meter",
+    #     "bench",
+    #     "bird",
+    #     "cat",
+    #     "dog",
+    #     "horse",
+    #     "sheep",
+    #     "cow",
+    #     "elephant",
+    #     "bear",
+    #     "zebra",
+    #     "giraffe",
+    #     "backpack",
+    #     "umbrella",
+    #     "handbag",
+    #     "tie",
+    #     "suitcase",
+    #     "frisbee",
+    #     "skis",
+    #     "snowboard",
+    #     "sports ball",
+    #     "kite",
+    #     "baseball bat",
+    #     "baseball glove",
+    #     "skateboard",
+    #     "surfboard",
+    #     "tennis racket",
+    #     "bottle",
+    #     "wine glass",
+    #     "cup",
+    #     "fork",
+    #     "knife",
+    #     "spoon",
+    #     "bowl",
+    #     "banana",
+    #     "apple",
+    #     "sandwich",
+    #     "orange",
+    #     "broccoli",
+    #     "carrot",
+    #     "hot dog",
+    #     "pizza",
+    #     "donut",
+    #     "cake",
+    #     "chair",
+    #     "couch",
+    #     "potted plant",
+    #     "bed",
+    #     "dining table",
+    #     "toilet",
+    #     "tv",
+    #     "laptop",
+    #     "mouse",
+    #     "remote",
+    #     "keyboard",
+    #     "cell phone",
+    #     "microwave",
+    #     "oven",
+    #     "toaster",
+    #     "sink",
+    #     "refrigerator",
+    #     "book",
+    #     "clock",
+    #     "vase",
+    #     "scissors",
+    #     "teddy bear",
+    #     "hair drier",
+    #     "toothbrush",
+    # ]
 
     def __init__(
         self,
         cfg,
-        confidence_threshold=0.7,
+        confidence_threshold=0.6,
         show_mask_heatmaps=False,
         masks_per_dim=2,
         min_image_size=224,
@@ -147,7 +157,11 @@ class COCODemo(object):
 
         save_dir = cfg.OUTPUT_DIR
         checkpointer = DetectronCheckpointer(cfg, self.model, save_dir=save_dir)
-        _ = checkpointer.load(cfg.MODEL.WEIGHT)
+        '''支持导入自己的模型'''
+        if cfg.MODEL.PRETRAINED_DETECTOR_CKPT != "":
+            _ = checkpointer.load(cfg.MODEL.PRETRAINED_DETECTOR_CKPT)
+        else:
+            _ = checkpointer.load(cfg.MODEL.WEIGHT)
 
         self.transforms = self.build_transform()
 
@@ -204,7 +218,7 @@ class COCODemo(object):
                 the BoxList via `prediction.fields()`
         """
         predictions = self.compute_prediction(image)
-        top_predictions = self.select_top_predictions(predictions)
+        boxkeep,top_predictions = self.select_top_predictions(predictions)
 
         result = image.copy()
         if self.show_mask_heatmaps:
@@ -214,6 +228,8 @@ class COCODemo(object):
             result = self.overlay_mask(result, top_predictions)
         if self.cfg.MODEL.KEYPOINT_ON:
             result = self.overlay_keypoints(result, top_predictions)
+        if self.cfg.MODEL.RELATION_ON:
+            result = self.overlay_relations(result, top_predictions,boxkeep)
         # TODO Kaihua Tang
         # Add relation and attribute
         result = self.overlay_class_names(result, top_predictions)
@@ -234,7 +250,7 @@ class COCODemo(object):
         image = self.transforms(original_image)
         # convert to an ImageList, padded so that it is divisible by
         # cfg.DATALOADER.SIZE_DIVISIBILITY
-        image_list = to_image_list(image, self.cfg.DATALOADER.SIZE_DIVISIBILITY)
+        image_list = to_image_list(image, self.cfg.DATALOADER.SIZE_DIVISIBILITY)#padding，到可以被SIZE_DIVISIBILITY整除
         image_list = image_list.to(self.device)
         # compute predictions
         with torch.no_grad():
@@ -271,12 +287,22 @@ class COCODemo(object):
                 of the detection properties can be found in the fields of
                 the BoxList via `prediction.fields()`
         """
-        scores = predictions.get_field("scores")
+        scores = predictions.get_field('pred_scores')#本来是'score'但不存在该field
+        rel_pair_idxs = predictions.get_field('rel_pair_idxs')
+        pred_rel_scores=predictions.get_field('pred_rel_scores')
+        relness=predictions.get_field('relness')#todo 分别代表什么含义？ 解答：最后一维是3，因为有三个classifier iteration(bgnn)
+        pred_rel_labels = predictions.get_field('pred_rel_labels')
         keep = torch.nonzero(scores > self.confidence_threshold).squeeze(1)
+        '''重新组织prediction中的fields,保留与上述对应的relation，暂时不管two stage'''
+        # num_boxes=boxes.size(0)
+        mask=torch.tensor([rel_pair_idx[0] in keep and rel_pair_idx[1] in keep for rel_pair_idx in rel_pair_idxs])
+        rel_pair_idxs=rel_pair_idxs[mask];pred_rel_scores=pred_rel_scores[mask];relness=relness[mask];pred_rel_labels=pred_rel_labels[mask]
         predictions = predictions[keep]
-        scores = predictions.get_field("scores")
+        scores = predictions.get_field("pred_scores")
         _, idx = scores.sort(0, descending=True)
-        return predictions[idx]
+        top_predictions=predictions[idx]
+        top_predictions.add_field('rel_pair_idxs',rel_pair_idxs);top_predictions.add_field('pred_rel_scores',pred_rel_scores);top_predictions.add_field('relness',relness);top_predictions.add_field('pred_rel_labels',pred_rel_labels)
+        return keep,top_predictions
 
     def compute_colors_for_labels(self, labels):
         """
@@ -295,7 +321,7 @@ class COCODemo(object):
             predictions (BoxList): the result of the computation by the model.
                 It should contain the field `labels`.
         """
-        labels = predictions.get_field("labels")
+        labels = predictions.get_field("pred_labels")#本来是'labels'
         boxes = predictions.bbox
 
         colors = self.compute_colors_for_labels(labels).tolist()
@@ -304,7 +330,7 @@ class COCODemo(object):
             box = box.to(torch.int64)
             top_left, bottom_right = box[:2].tolist(), box[2:].tolist()
             image = cv2.rectangle(
-                image, tuple(top_left), tuple(bottom_right), tuple(color), 1
+                image, tuple(top_left), tuple(bottom_right), tuple(color), 2
             )
 
         return image
@@ -342,6 +368,40 @@ class COCODemo(object):
         kps = torch.cat((kps[:, :, 0:2], scores[:, :, None]), dim=2).numpy()
         for region in kps:
             image = vis_keypoints(image, region.transpose((1, 0)))
+        return image
+
+    def overlay_relations(self, image, predictions,boxkeep):
+        pred_labels = predictions.get_field('pred_labels')
+        pred_rel_labels = predictions.get_field('pred_rel_labels')
+        rel_pair_idxs = predictions.get_field('rel_pair_idxs')
+        rel_scores,_ = torch.max(predictions.get_field('pred_rel_scores')[:,1:],-1)
+        boxes = predictions.bbox
+        # for rel_pair_idx,rel_label in zip(rel_pair_idxs,pred_rel_labels):
+        #     l1=obj_labels[rel_pair_idx[0]]
+        #     l2 = obj_labels[rel_pair_idx[1]]
+        #过滤掉低于阈值的rel
+        keep = torch.nonzero(rel_scores > 0.20).squeeze(1)
+        rel_labels = [self.PRE_CATEGORIES[i] for i in pred_rel_labels[keep]]
+        obj_labels= [self.CATEGORIES[i] for i in pred_labels]
+        colors = self.compute_colors_for_labels(pred_rel_labels[keep]).tolist()
+
+        for rel_pair_idx, color,rel_label in zip(rel_pair_idxs[keep], colors,rel_labels):
+            l1=obj_labels[torch.nonzero(rel_pair_idx[0] == boxkeep).squeeze()]
+            l2 = obj_labels[torch.nonzero(rel_pair_idx[1] == boxkeep).squeeze()]
+            box1=boxes[torch.nonzero(rel_pair_idx[0]==boxkeep).squeeze()]
+            box2 = boxes[torch.nonzero(rel_pair_idx[1]==boxkeep).squeeze()]
+            box1 = box1.to(torch.int64);box2 = box2.to(torch.int64)
+            center1=((box1[:2]+box1[2:])/2);center2=((box2[:2]+box2[2:])/2)
+            center = ((center1+center2)/2).tolist()
+            image = cv2.arrowedLine(image, center1.tolist(), center2.tolist(),tuple(color), 2, 8, 0, 0.03)
+            cv2.putText(
+                image, l1+' '+rel_label+' '+l2, center, cv2.FONT_HERSHEY_SIMPLEX, .5, tuple(color), 2
+            )
+            print(l1+' '+rel_label+' '+l2)
+            # image = cv2.rectangle(
+            #     image, tuple(top_left), tuple(bottom_right), tuple(color), 1
+            # )
+
         return image
 
     def create_mask_montage(self, image, predictions):
@@ -390,8 +450,8 @@ class COCODemo(object):
             predictions (BoxList): the result of the computation by the model.
                 It should contain the field `scores` and `labels`.
         """
-        scores = predictions.get_field("scores").tolist()
-        labels = predictions.get_field("labels").tolist()
+        scores = predictions.get_field("pred_scores").tolist()#增加了'pred'
+        labels = predictions.get_field("pred_labels").tolist()#增加了'pred'
         labels = [self.CATEGORIES[i] for i in labels]
         boxes = predictions.bbox
 
@@ -400,7 +460,7 @@ class COCODemo(object):
             x, y = box[:2]
             s = template.format(label, score)
             cv2.putText(
-                image, s, (x, y), cv2.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1
+                image, s, (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1
             )
 
         return image

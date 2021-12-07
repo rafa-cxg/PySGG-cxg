@@ -614,7 +614,7 @@ class BGNNPredictor(nn.Module):
             )
             refined_obj_logits = to_onehot(obj_labels, self.num_obj_cls)
         else:
-            refined_obj_logits = self.obj_classifier(obj_feats)
+            refined_obj_logits = self.obj_classifier(obj_feats)#在这里才是最终的object预测类别哎
         if not cfg.MODEL.TWO_STAGE_HEAD:
             a=1
         rel_cls_logits = self.rel_classifier(rel_feats)
@@ -633,11 +633,11 @@ class BGNNPredictor(nn.Module):
                     [proposal.get_field("boxes_per_cls") for proposal in inst_proposals], dim=0
                 )  # comes from post process of box_head
                 # here we use the logits refinements by adding
-                if self.obj_recls_logits_update_manner == "add":
+                if self.obj_recls_logits_update_manner == "add":#决定用什么方法使用refine后的object预测分数
                     obj_pred_logits = refined_obj_logits + obj_pred_logits
                 if self.obj_recls_logits_update_manner == "replace":
                     obj_pred_logits = refined_obj_logits
-                refined_obj_pred_labels = obj_prediction_nms(
+                refined_obj_pred_labels = obj_prediction_nms(#同样排除了bg的可能性
                     boxes_per_cls, obj_pred_logits, nms_thresh=0.5
                 )
                 obj_pred_labels = refined_obj_pred_labels
@@ -645,7 +645,7 @@ class BGNNPredictor(nn.Module):
                 _, obj_pred_labels = refined_obj_logits[:, 1:].max(-1)
         else:
             obj_pred_labels = cat(
-                [each_prop.get_field("pred_labels") for each_prop in inst_proposals], dim=0
+                [each_prop.get_field("pred_labels") for each_prop in inst_proposals], dim=0#todo 看来无论何种mode，都是采用不加background的label,为什么？因为预测object是faster rcnn的任务，已经完成，默认它输出的都是对的（起码不是背景）
             )
 
         if self.use_bias:
@@ -658,7 +658,7 @@ class BGNNPredictor(nn.Module):
             pair_pred = cat(pair_preds, dim=0)
             rel_cls_logits = (
                 rel_cls_logits #torch.Size([2006, 51]),predcls:[128,51]
-                + self.freq_lambda * self.freq_bias.index_with_labels(pair_pred.long())#搞什么embedding?什么ststics?
+                + self.freq_lambda * self.freq_bias.index_with_labels(pair_pred.long())#搞什么embedding?什么ststics? self.freq_bias.index_with_labels(pair_pred.long())：[4096,51]
             )
 
         obj_pred_logits = obj_pred_logits.split(num_objs, dim=0)#list of [num_prop,151] predcls用的gt值
