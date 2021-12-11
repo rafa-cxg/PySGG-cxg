@@ -47,17 +47,18 @@ def do_vg_evaluation(
     multiple_preds = cfg.TEST.RELATION.MULTIPLE_PREDS
     iou_thres = cfg.TEST.RELATION.IOU_THRESHOLD
     assert mode in {'predcls', 'sgdet', 'sgcls', 'phrdet', 'preddet'}
-    #为了在gt中加入第一阶段gt
-    predicateid2cluster={}
-    with open(os.path.join(cluster_dir, 'predicate2cluster.json'), 'r') as json_file:#事实上应该叫c2p
-        pc = json.load(json_file)
-        for key, value in pc.items():
-            for v in value:
-                predicateid2cluster[int(v)] = int(key) + 1  # 留出backgroud位置
-                predicateid2cluster[0]=0
-        p2c=torch.zeros((51),dtype=torch.int).to('cuda')
-        for idx in range(0,51):#转换成tensor
-            p2c[idx]=predicateid2cluster[idx]
+    if cfg.USE_CLUSTER==True:
+        #为了在gt中加入第一阶段gt
+        predicateid2cluster={}
+        with open(os.path.join(cluster_dir, 'predicate2cluster.json'), 'r') as json_file:#事实上应该叫c2p
+            pc = json.load(json_file)
+            for key, value in pc.items():
+                for v in value:
+                    predicateid2cluster[int(v)] = int(key) + 1  # 留出backgroud位置
+                    predicateid2cluster[0]=0
+            p2c=torch.zeros((51),dtype=torch.int).to('cuda')
+            for idx in range(0,51):#转换成tensor
+                p2c[idx]=predicateid2cluster[idx]
     groundtruths = []
     for image_id, prediction in enumerate(predictions):
         img_info = dataset.get_img_info(image_id)
@@ -68,7 +69,8 @@ def do_vg_evaluation(
         '''把cluster的结果，以truple方式添加到gt中'''
         gt = dataset.get_groundtruth(image_id, evaluation=True)
         gt_2stage_tuple=gt.get_field('relation_tuple').clone()
-        gt_2stage_tuple[:,2]=p2c[gt_2stage_tuple[:,2]]
+        if cfg.USE_CLUSTER == True:
+            gt_2stage_tuple[:,2]=p2c[gt_2stage_tuple[:,2]]
         gt.add_field('2stage_tuple',gt_2stage_tuple)
         groundtruths.append(gt)
 

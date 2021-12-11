@@ -42,7 +42,7 @@ import torch.distributed as dist
 from pysgg.utils.comm import all_gather
 
 from clustering import  clustering
-
+from pysgg.utils.comm import is_main_process
 # See if we can use apex.DistributedDataParallel instead of the torch default,
 # and enable mixed-precision via apex.amp
 try:
@@ -397,8 +397,10 @@ def train(
             with open(os.path.join(cfg.OUTPUT_DIR, "cluster_on_dataset.pkl"), 'rb') as f:
                 feature=pickle.load(f)
         #clustering algorithm to use
-        deepcluster = clustering.__dict__['Kmeans'](3)
-        clustering_loss = deepcluster.cluster(feature.to('cpu').numpy())
+        if is_main_process():
+            deepcluster = clustering.__dict__['Kmeans'](3)
+        # clustering_loss = deepcluster.faiss_cluster(feature.to('cpu').numpy())
+            clustering_loss = deepcluster.sklearn_cluster(feature.to('cpu').numpy())
     for iteration, (images, targets, _) in (enumerate(train_data_loader, start_iter)):
         torch.cuda.empty_cache()
         if any(len(target) < 1 for target in targets):
@@ -679,6 +681,7 @@ def main():
     parser.add_argument("--local_rank", type=int, default=0)
     parser.add_argument(
         "--skip-test",
+        default='True',
         dest="skip_test",
         help="Do not test the final model",
         action="store_true",

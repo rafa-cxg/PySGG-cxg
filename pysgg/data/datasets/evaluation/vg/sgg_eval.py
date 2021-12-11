@@ -391,10 +391,12 @@ class SGMeanRecall(SceneGraphEvaluation):
     def __init__(self, result_dict, num_rel, ind_to_predicates, print_detail=False):
         super(SGMeanRecall, self).__init__(result_dict)
         self.num_rel = num_rel
-        self.num_cluster = cfg.MODEL.NUM_REL_GROUP+1
+        self.num_cluster = cfg.MODEL.TWO_STAGE_HEAD.NUM_REL_GROUP+1
         self.print_detail = print_detail
         self.rel_name_list = ind_to_predicates[1:]  # remove __background__
-        self.cluster_name_list =['cluster1','cluster2','cluster3']
+        if cfg.USE_CLUSTER:
+            self.cluster_name_list =['cluster'%i for i in cfg.MODEL.TWO_STAGE_HEAD.NUM_REL_GROUP]
+        else: self.cluster_name_list = self.rel_name_list
         self.type = "mean_recall"
 
     def register_container(self, mode):

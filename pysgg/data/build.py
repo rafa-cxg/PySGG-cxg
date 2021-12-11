@@ -19,6 +19,7 @@ from pysgg.config import cfg
 from pysgg.utils.comm import get_world_size, is_main_process, synchronize
 from pysgg.utils.imports import import_file
 from pysgg.utils.miscellaneous import save_labels
+from pysgg.modeling.roi_heads.relation_head.utils_motifs import encode_rel_box_info
 
 from . import datasets as D
 from . import samplers
@@ -82,6 +83,7 @@ def norm_distribution(prob, num=150,dim=1):
     sum_value = np.sum(prob_weight, keepdims=True, axis=dim)
 
     prob_weight = prob_weight / np.repeat(sum_value, prob_weight.shape[dim], axis=dim)
+    prob_weight[0,:]=0#避免nan
     return prob_weight
 def plot_distribution_bar(rel_array,data,object=False): #input should be an np array
     stastic_photo_dir='clustering/stastic_photo_dir/'
@@ -196,7 +198,7 @@ def multi_process_stastics(train_idx,train_data,rel_obj_distribution,sub_rel_dis
     return  rel_obj_distribution,sub_rel_distribution,obj_rel_distribution,pred_counter
 
 #by cxg
-def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=False,clustering=False):
+def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=False,clustering=True):
     """save relation frequency distribution after the sampling etc processing
     the data distribution that model will be trained on it
 
@@ -232,7 +234,7 @@ def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=Fa
         #归一化
         sub_rel_distribution=norm_distribution(sub_rel_distribution)
         obj_rel_distribution =norm_distribution(obj_rel_distribution)
-        rel_obj_distribution = norm_distribution(rel_obj_distribution[0:,0:])
+        rel_obj_distribution = norm_distribution(rel_obj_distribution)
         with open(os.path.join(cfg.OUTPUT_DIR, "pred_counter.pkl"), 'wb') as f:
             pickle.dump(pred_counter, f)
         if record_rel_distribution:
@@ -254,7 +256,7 @@ def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=Fa
         if clustering:
             # rel_obj_distribution_norm=norm_distribution(rel_obj_distribution[1:,1:])
             Wasserstein_distance_mat=compute_Wasserstein_distance(rel_obj_distribution[1:,1:])
-            kmedoids = KMedoids(n_clusters=3, metric='precomputed', method='pam', init='random', max_iter=100000).fit(
+            kmedoids = KMedoids(n_clusters=cfg.MODEL.TWO_STAGE_HEAD.NUM_REL_GROUP, metric='precomputed', method='pam', init='random', max_iter=100000).fit(
                 Wasserstein_distance_mat)
             predicate2cluster,predicatename2cluster = map_predicate2cluster(train_data, kmedoids.labels_)
             a=1
@@ -310,32 +312,52 @@ def compute_features(dataloader, N):
     device = torch.device(cfg.MODEL.DEVICE)
     num_gpus = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
     with open(os.path.join(cfg.OUTPUT_DIR, "record_sub_distribution.pkl"), 'rb') as f1:
-        sub_distribution = torch.tensor(pickle.load(f1)).clone().detach().to('cuda')
+        sub_distribution = torch.tensor(pickle.load(f1)).clone().detach()
     with open(os.path.join(cfg.OUTPUT_DIR, "record_obj_distribution.pkl"), 'rb') as f2:
-        obj_distribution = torch.tensor(pickle.load(f2)).clone().detach().to('cuda')
+        obj_distribution = torch.tensor(pickle.load(f2)).clone().detach()
+    sub_distribution+=1e-6
+    obj_distribution += 1e-6
     if dist.get_rank() == 0:
         print('Compute features')
     batch_time = AverageMeter()
     end = time.time()
     features = []
     # discard the label information in the dataloader
-    for i, (images, targets, _) in tqdm(enumerate(dataloader),total=int(len(dataloader.dataset)/cfg.SOLVER.IMS_PER_BATCH/num_gpus)):
-        # images = images.to(device)
+    for i, (images, targets, _) in tqdm(enumerate(dataloader),total=int(len(dataloader.dataset)/cfg.SOLVER.IMS_PER_BATCH)):
+
         labels =[target.get_field('labels') for target in targets]
         relation_tuples = [target.get_field('relation_tuple') for target in targets]
-        labels=torch.cat(labels)
-        relation_tuples=torch.cat(relation_tuples)
-        # for label,relation_tuple in zip(labels,relation_tuples):
-        sub=sub_distribution[labels[relation_tuples[:, 0]]]
-        obj = obj_distribution[labels[relation_tuples[:, 1]]]
-        rel = relation_tuples[:, 2].to('cuda').type(dtype=torch.double).unsqueeze(-1)
-        aux=torch.cat((sub,obj,rel),-1)
+        # for proposal,relation_tuple in zip(targets,relation_tuples):
+        interactions=(encode_rel_box_info(targets, relation_tuples))
+        # interaction=torch.cat(interaction).to('cuda')
+        # labels=torch.cat(labels)
+        # relation_tuples=torch.cat(relation_tuples)
+        fuse_norm=[]
+        for label,relation_tuple,interaction in zip(labels,relation_tuples,interactions):
+
+            sub=sub_distribution[label[relation_tuple[:, 0]]]
+            if torch.any(torch.isnan(sub))==True:
+                print('fuck1')
+            obj = obj_distribution[label[relation_tuple[:, 1]]]
+            if torch.any(torch.isnan(obj))==True:
+                print('fuck2')
+            if torch.any(torch.isnan(interaction)) == True:
+                print('fuck3')
+            rp_num=sub.shape[1]
+            fuse=sub *obj+torch.repeat_interleave(interaction,rp_num,-1)
+            if torch.any(torch.isnan(fuse)) == True:
+                print('fuck4')
+            if torch.any(torch.isnan(torch.nn.functional.normalize(fuse, p=2.0, dim=1, eps=1e-12, out=None))) == True:
+                print('fuck5')
+            rel = relation_tuple[:, 2].type(dtype=torch.double).unsqueeze(-1)
+            fuse_norm.append(torch.cat((torch.nn.functional.normalize(fuse, p=2.0, dim=1, eps=1e-12, out=None),rel),-1))
 
 
-
+        # # aux=torch.cat((sub,obj,rel),-1)
+        # aux = torch.cat((fuse_norm, rel), -1)
         # aux = aux.astype('float32')
         if i < len(dataloader):
-            features.append(aux) #TODO BATCH是整个还是单个gpu的，值得商榷
+            features.extend(fuse_norm) #TODO BATCH是整个还是单个gpu的，值得商榷
 
 
         # measure elapsed time
@@ -346,6 +368,7 @@ def compute_features(dataloader, N):
             print('{0} / {1}\t'
                   'Time: {batch_time.val:.3f} ({batch_time.avg:.3f})'
                   .format(i, len(dataloader), batch_time=batch_time))
+        # features=[feature in features]
     return torch.cat(features,0)
 def build_dataset(cfg, dataset_list, transforms, dataset_catalog, is_train=True):
     """
@@ -377,7 +400,7 @@ def build_dataset(cfg, dataset_list, transforms, dataset_catalog, is_train=True)
         # print("build dataset with args:")
         # pprint(args)
         dataset = factory(**args)#通过arg提供vgdataset参数
-        datasets.append(dataset)
+        datasets.append(dataset)#if val 这个长度是5000
 
     # for testing, return a list of datasets
     if not is_train:

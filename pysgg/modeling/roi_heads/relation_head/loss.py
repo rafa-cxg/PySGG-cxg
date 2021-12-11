@@ -77,8 +77,7 @@ class RelationLossComputation(object):
         if len(torch.nonzero(rel_labels != -1)) == 0:
             loss_relation = None
         else:
-            if all(torch.isfinite(relation_logits))!=True:
-                print('fuck')
+
             loss_relation = self.criterion_loss(relation_logits[rel_labels != -1],#交叉熵 relation_logits[128,51]
                                                 rel_labels[rel_labels != -1].long())
 
@@ -177,7 +176,7 @@ class TwoStageLossComputation(object):
     def __init__(
         self,
         num_rel_group,
-        alpha=0.999, gamma=5.0,
+        alpha=0.75, gamma=4.0,
             logits=True
     ):
         """

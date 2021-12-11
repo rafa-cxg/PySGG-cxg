@@ -82,7 +82,7 @@ class TwoStagePredictor(nn.Module):
         self.geometry_feat_dim = 128
         self.input_dim = (in_channels+self.word_dim+self.geometry_feat_dim)*2#4096
         if cfg.MODEL.TWO_STAGE_HEAD.PURE_SENMENTIC:
-            self.input_dim=2048+512
+            self.input_dim=2048+1024
         self.hidden_dim = config.MODEL.TWO_STAGE_HEAD.HIDDEN_DIM#4096
         #待定self.context_layer=
         # post classification

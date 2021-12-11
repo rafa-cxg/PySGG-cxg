@@ -16,7 +16,9 @@ import torch
 import torch.utils.data as data
 import torchvision.transforms as transforms
 import os
-
+from sklearn.cluster import KMeans
+from sklearn.metrics import adjusted_rand_score
+from functools import reduce
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 __all__ = ['PIC', 'Kmeans', 'cluster_assign', 'arrange_clustering']
@@ -187,7 +189,7 @@ def cluster_assign(images_lists, dataset):
     return ReassignedDataset(image_indexes, pseudolabels, dataset, t)
 
 
-def run_kmeans(x, nmb_clusters, verbose=True):
+def faiss_run_kmeans(x, nmb_clusters, verbose=True):
     """Runs kmeans on 1 GPU.
     Args:
         x: data
@@ -250,7 +252,7 @@ class Kmeans(object):
     def __init__(self, k):
         self.k = k
 
-    def cluster(self, data, verbose=True):
+    def faiss_cluster(self, data, verbose=True):
         """Performs k-means clustering.
             Args:
                 x_data (np.array N * dim): data to cluster
@@ -261,7 +263,7 @@ class Kmeans(object):
         # xb = preprocess_features(data,data.shape[1]) #感觉不需要，我的输入维度已经够小且Norm过了
         xb=data
         # cluster the data
-        I, loss = run_kmeans(xb, self.k, verbose)#I: list 0f cluster number. len:40000
+        I, loss = faiss_run_kmeans(xb, self.k, verbose)#I: list 0f cluster number. len:40000
         self.images_lists = [[] for i in range(self.k)]
         for i in range(len(data)):
             self.images_lists[I[i]].append(i)#list,元素对应每个cluster包含的instance序号
@@ -270,6 +272,38 @@ class Kmeans(object):
 
         return loss
 
+    def sklearn_cluster(self, data, verbose=True):
+        x=data[:,:-1]
+        y=data[:,-1]
+        end = time.time()
+        # KMeans(algorithm='auto', copy_x=True, init='random', max_iter=300,
+        #        n_clusters= self.k, n_init=1000, n_jobs=None, precompute_distances='auto',
+        #        random_state=45, tol=0.0001, verbose=0)
+        km = KMeans(algorithm='auto', copy_x=True, init='random', max_iter=300,
+               n_clusters= self.k, n_jobs=None, precompute_distances='auto',
+               random_state=45, tol=0.0001, verbose=0)
+        shit=np.any(np.isnan(x))
+        km.fit(x)
+        print("Adjusted Rand Score: {0:.3f}".format(adjusted_rand_score(y, km.labels_)))
+
+        print("Inertia: {0:.1f}".format(km.inertia_))
+        if verbose:
+            print('k-means time: {0:.0f} s'.format(time.time() - end))
+
+        matchs = reduce(np.union1d, y)
+        evaluater={}
+        for match in matchs:
+            mask=np.nonzero(y==match)
+            total=np.count_nonzero(y==match)
+            for i in range(0,self.k):
+                evaluater[i]=np.count_nonzero(km.labels_[mask]==i)/total*100
+            array = np.array(list(evaluater.items()))
+            idx=np.argmax(array[:,-1],-1)
+            print('relation {} belong to {} cluster for {}%, in {} samples'.format(match,idx, evaluater[idx],total))
+        if verbose:
+
+            print("show t-sne result")
+            plot_t_sne(x, y, km.labels_)
 
 def make_adjacencyW(I, D, sigma):
     """Create adjacency matrix with a Gaussian kernel.

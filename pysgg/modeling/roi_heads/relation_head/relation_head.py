@@ -34,7 +34,7 @@ class ROIRelationHead(torch.nn.Module):
     def __init__(self, cfg, in_channels):
         super(ROIRelationHead, self).__init__()
         self.cfg = cfg.clone()
-
+        self.usecluster = False
         self.num_obj_cls = cfg.MODEL.ROI_BOX_HEAD.NUM_CLASSES
         self.num_rel_cls = cfg.MODEL.ROI_RELATION_HEAD.NUM_CLASSES
 
@@ -46,7 +46,10 @@ class ROIRelationHead(torch.nn.Module):
                 self.mode = "sgcls"
         else:
             self.mode = "sgdet"
-
+        if cfg.USE_CLUSTER:
+            self.usecluster=True#代表第一阶段标签是聚类后的
+            with open('clustering/predicate2cluster.json', 'r') as f:
+                self.predicate2cluster = json.load(f)
         # same structure with box head, but different parameters
         # these param will be trained in a slow learning rate, while the parameters of box head will be fixed
         # Note: there is another such extractor in uniton_feature_extractor
@@ -135,7 +138,7 @@ class ROIRelationHead(torch.nn.Module):
                         if self.cfg.MODEL.TWO_STAGE_HEAD.UNION_BOX:
                             proposals,rel_labels,rel_pair_idxs,gt_rel_binarys_matrix,_,_=kwargs.values()
                         else:
-                            proposals=kwargs['detections']; rel_labels=kwargs['rel_labels']; rel_pair_idxs=kwargs['rel_pair_idxs']
+                            proposals=kwargs['proposals']; rel_labels=kwargs['rel_labels']; rel_pair_idxs=kwargs['rel_pair_idxs']
                             gt_rel_binarys_matrix=kwargs['gt_rel_binarys_matrix']
                         rel_labels_all = rel_labels
                 else:
@@ -167,7 +170,7 @@ class ROIRelationHead(torch.nn.Module):
             # gt_2stage=0
             if kwargs!= {}:
                 rel_labels = kwargs['rel_labels']
-                rel_labels_all = kwargs['rel_labels_all']
+                # rel_labels_all = kwargs['rel_labels_all']
                 gt_rel_binarys_matrix = kwargs['gt_rel_binarys_matrix']
             device = features[0].device
             for proposal in proposals:
@@ -253,17 +256,17 @@ class ROIRelationHead(torch.nn.Module):
             #     logger,
             # )
 
-            with open('clustering/predicate2cluster.json', 'r') as f:
-                predicate2cluster = json.load(f)
+
             # sactter_two_stage_logits_batch = []
             for idx, proposal in enumerate(proposals):
-                sactter_two_stage_logits = torch.zeros(proposal.get_field('two_stage_pred_rel_logits').size(0),self.cfg.MODEL.ROI_RELATION_HEAD.NUM_CLASSES).float().to('cuda')
-
-                for key, value in predicate2cluster.items():
-                    sactter_two_stage_logits[:, [int(i) for i in value]] = proposal.get_field(
-                        "two_stage_pred_rel_logits")[:, int(key) + 1].unsqueeze(-1).expand(-1, len(value))
-                sactter_two_stage_logits[:, 0] = proposal.get_field("two_stage_pred_rel_logits")[:, 0]
-                # sactter_two_stage_logits_batch.append(sactter_two_stage_logits)
+                sactter_two_stage_logits = torch.zeros(proposal.get_field('two_stage_pred_rel_logits').size(0),self.cfg.MODEL.ROI_RELATION_HEAD.NUM_CLASSES).type(torch.DoubleTensor).to('cuda')
+                if self.usecluster:
+                    for key, value in self.predicate2cluster.items():
+                        sactter_two_stage_logits[:, [int(i) for i in value]] = proposal.get_field(
+                            "two_stage_pred_rel_logits")[:, int(key) + 1].unsqueeze(-1).expand(-1, len(value))
+                    sactter_two_stage_logits[:, 0] = proposal.get_field("two_stage_pred_rel_logits")[:, 0]
+                    # sactter_two_stage_logits_batch.append(sactter_two_stage_logits)
+                else: sactter_two_stage_logits=proposal.get_field("two_stage_pred_rel_logits")
                 relation_logits[idx] = relation_logits[idx]+sactter_two_stage_logits
 
 

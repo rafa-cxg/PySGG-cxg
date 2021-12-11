@@ -76,8 +76,8 @@ MODEL:
   MASK_ON: false
   RETINANET_ON: false
   META_ARCHITECTURE: GeneralizedRCNN
-  PRETRAINED_DETECTOR_CKPT: checkpoints/detection/pretrained_faster_rcnn/vg_faster_det.pth
-#  PRETRAINED_DETECTOR_CKPT: checkpoints/predcls-BGNNPredictor/cxg4/model_0055200.pth
+#  PRETRAINED_DETECTOR_CKPT: checkpoints/detection/pretrained_faster_rcnn/vg_faster_det.pth
+  PRETRAINED_DETECTOR_CKPT: checkpoints/predcls-BGNNPredictor/only_1stage/model_0003600.pth
   RELATION_ON: true
   RESNETS:
     BACKBONE_OUT_CHANNELS: 256
@@ -99,12 +99,13 @@ MODEL:
 
   TWO_STAGE_HEAD:
     PURE_SENMENTIC: true
+    USE_GLOVE: true #只有在PURE_SEMENTIC为TRUE才起效
     INDIVIDUAL_BOX: false
     UNION_BOX: false  #union和indi不能同时为true
     transformer_pos: false
     HIDDEN_DIM: 1024
     PREDICTOR: TwoStagePredictor
-    NUM_REL_GROUP: 3
+    NUM_REL_GROUP: 50
     BATCH_SIZE_PER_IMAGE: 1000
     POSITIVE_FRACTION: 1
   ROI_ATTRIBUTE_HEAD:
@@ -376,7 +377,7 @@ SOLVER:
   GAMMA: 0.5
   GRAD_NORM_CLIP: 5.0
   IMS_PER_BATCH: 12
-  MAX_ITER: 4
+  MAX_ITER: 40000
   MOMENTUM: 0.9
   PRE_VAL: false
   PRINT_GRAD_FREQ: 4000

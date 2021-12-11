@@ -154,12 +154,15 @@ def encode_rel_box_info(proposals,rel_pair_idxs):#todo 和上面的函数有很�
 
     """
     assert proposals[0].mode == 'xyxy'
+
+    sizes=[(proposal.size) for proposal in proposals]
+    proposals = [proposal.bbox for proposal in proposals]
     boxes_info = []
-    for proposal,rel_pair_idx in zip(proposals,rel_pair_idxs):
+    for proposal,rel_pair_idx,siz in zip(proposals,rel_pair_idxs,sizes):
         sub_idx=rel_pair_idx[:,0]
         obj_idx = rel_pair_idx[:,1]
-        boxes = proposal[sub_idx].bbox
-        img_size = proposal[sub_idx].size
+        boxes = proposal[sub_idx]
+        img_size = siz
         wid = img_size[0]
         hei = img_size[1]
         wh = boxes[:, 2:] - boxes[:, :2] + 1.0
@@ -169,23 +172,28 @@ def encode_rel_box_info(proposals,rel_pair_idxs):#todo 和上面的函数有很�
         sub_x1, sub_y1, sub_x2, sub_y2 = boxes.split([1,1,1,1], dim=-1)
         assert wid * hei != 0
         '''obj_box'''
-        boxes = proposal[obj_idx].bbox
-        img_size = proposal[obj_idx].size
+        boxes = proposal[obj_idx]
+        img_size = siz
         wid = img_size[0]
         hei = img_size[1]
         wh = boxes[:, 2:] - boxes[:, :2] + 1.0
         xy = boxes[:, :2] + 0.5 * wh
         obj_w, obj_h = wh.split([1, 1], dim=-1)
-        obj_x, obj_y = xy.split([1, 1], dim=-1)
+        obj_x, obj_y = xy.split([1, 1], dim=-1)#
         obj_x1, obj_y1, obj_x2, obj_y2 = boxes.split([1, 1, 1, 1], dim=-1)
         assert wid * hei != 0
         distance=torch.pow(( torch.pow((sub_x-obj_x)/wid,2)+torch.pow((sub_y-obj_y)/hei,2)),0.5)
-        iou=(sub_x2-obj_x1)*(sub_y2-obj_y1)/(obj_h*obj_w+sub_h*sub_w-(sub_x2-obj_x1)*(sub_y2-obj_y1))
 
-        info = torch.cat([distance,iou], dim=-1).view(-1, 2)
+        iou=(sub_x2-obj_x1)*(sub_y2-obj_y1)/(obj_h*obj_w+sub_h*sub_w-(sub_x2-obj_x1)*(sub_y2-obj_y1))
+        iou[iou<0]=0#+1e-12
+        distance=distance#+1e-12#todo 我该不该只加等于0的？
+        info =torch.cat((iou,distance), dim=1)# (iou - distance)/10
+        # info=torch.cat((iou,distance), dim=1).view(-1, 2)
+        # info=torch.nn.functional.normalize(info, p=2.0, dim=0, eps=1e-12, out=None)
+
         boxes_info.append(info)
 
-    return torch.cat(boxes_info, dim=0)
+    return boxes_info#torch.cat(boxes_info, dim=0)
 
 # class PositionalEncoding(nn.Module):
 #
