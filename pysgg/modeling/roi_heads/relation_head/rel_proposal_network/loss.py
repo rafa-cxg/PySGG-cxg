@@ -114,8 +114,8 @@ def loss_eval_mulcls_single_level(pre_cls_logits, rel_labels, loss):
 def loss_eval_hybrid_level(pre_cls_logits, rel_labels, loss):#loss分为两部分，第一部分是50rel分类，第二部分计算relateless,两个都是bce，所以2target可以
     selected_cls_logits = pre_cls_logits[rel_labels != -1]
 
-    mulitlabel_logits = selected_cls_logits[:, 1:]#排除最后一个 #todo 最后一个才是background?
-    bin_logits = selected_cls_logits[:, 0]#todo 和上面修改保持一致
+    mulitlabel_logits = selected_cls_logits[:, :-1]
+    bin_logits = selected_cls_logits[:, -1]#todo 和上面修改保持一致
 
     selected_labels = rel_labels[rel_labels != -1].long()
 

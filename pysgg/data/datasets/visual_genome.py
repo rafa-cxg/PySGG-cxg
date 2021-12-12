@@ -122,10 +122,10 @@ class VGDataset(torch.utils.data.Dataset):
             self.logger.info("load pre-compute box length %d" %
                              (len(self.pre_compute_bbox.keys())))
 
-        if cfg.MODEL.ROI_RELATION_HEAD.DATA_RESAMPLING and self.split == 'train' and cfg.USE_CLUSTER==False:#USE_CLUSTER代表是否计算整个数据集cluster
+        if cfg.MODEL.ROI_RELATION_HEAD.DATA_RESAMPLING and self.split == 'train' and cfg.USE_CLUSTER==False:#USE_CLUSTER代表是否计算整个数据集cluster,计算cluster不需要重复的sample
             self.resampling_method = cfg.MODEL.ROI_RELATION_HEAD.DATA_RESAMPLING_METHOD
             assert self.resampling_method in ['bilvl', 'lvis']
-
+            assert  self.split != 'val'
             self.global_rf = cfg.MODEL.ROI_RELATION_HEAD.DATA_RESAMPLING_PARAM.REPEAT_FACTOR
             self.drop_rate = cfg.MODEL.ROI_RELATION_HEAD.DATA_RESAMPLING_PARAM.INSTANCE_DROP_RATE
             # creat repeat dict in main process, other process just wait and load
@@ -152,7 +152,7 @@ class VGDataset(torch.utils.data.Dataset):
         #    while(random.random() > self.img_info[index]['anti_prop']):
         #        index = int(random.random() * len(self.filenames))
         if self.repeat_dict is not None:
-            index = self.idx_list[index]#list:165908[0,0,1,1..]
+            index = self.idx_list[index]#list:165908[0,0,1,1..]类似对数据集的照片index做了重定向（重复index的内容来增加图像数目）
 
         img = Image.open(self.filenames[index]).convert("RGB")
         if img.size[0] != self.img_info[index]['width'] or img.size[1] != self.img_info[index]['height']:
@@ -313,7 +313,7 @@ class VGDataset(torch.utils.data.Dataset):
             relation = np.array(relation, dtype=np.int32)
 
         relation_non_masked = None
-        if self.repeat_dict is not None:
+        if self.repeat_dict is not None and self.split=='train':                    #不加判断是否train会导致val的dataset也会对relation重复采样！
             relation, relation_non_masked = apply_resampling(index, 
                                                               relation,
                                                              self.repeat_dict,

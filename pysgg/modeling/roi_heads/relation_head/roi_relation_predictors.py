@@ -601,6 +601,7 @@ class BGNNPredictor(nn.Module):
         '''obj_feats:[num_prop_all,512], rel_feats:[128,512]'''
 
         #对于bgnn_context_layer的作用，我认为：存在3个iter(classifier),通过对每一iter特征loss监督（gt是rel_label），有助于获得更准确的rel feat,以便用在最后的classifier上
+        '''context_layer这里使用的是BGNNCONTEXT,rel_feats是来源于rel_feature4iter,这是个全连接降维，重复多次，每次得到的特征用于relawaremodel,对其计算loss从而获得较好的特征。把获得的rel特征return,'''
         obj_feats, rel_feats, pre_cls_logits, relatedness = self.context_layer(  # pre_cls_logits:LIST. rel_feats就是多次iter的最后一个。pre_cls_logits包括所有Iter
             roi_features, union_features, inst_proposals, rel_pair_idxs, rel_binarys, logger
         )

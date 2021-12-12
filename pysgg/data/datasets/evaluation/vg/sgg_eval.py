@@ -136,13 +136,13 @@ class SGRecall(SceneGraphEvaluation):
 
     def calculate_recall(self, global_container, local_container, mode):
         pred_rel_inds = local_container["pred_rel_inds"]#inds确实是编号，因为1 image里面proposal不能超过80个，所以inds也不超过80,这个编号直接从rel_pair_idx来的
-        pred_2stage_rel_inds = local_container['pred_2stage_rel_inds']
+
         rel_scores = local_container["rel_scores"]
-        pred_2stage_scores = local_container['2stage_rel_scores']
+
         gt_rels = local_container["gt_rels"]#[n,3],(sub_id, ob_id, pred_label)
         gt_classes = local_container["gt_classes"]
         gt_boxes = local_container["gt_boxes"]
-        gt_2stage=local_container['gt_2stage']#[n,3],(sub_id, ob_id, pred_label)
+
         pred_classes = local_container["pred_classes"]
         pred_boxes = local_container["pred_boxes"]#[]80,4
         obj_scores = local_container["obj_scores"]#[num_prop,]
@@ -150,25 +150,21 @@ class SGRecall(SceneGraphEvaluation):
 
 
         pred_rels = np.column_stack((pred_rel_inds, 1 + rel_scores[:, 1:].argmax(1)))#[4096,3],最后一个元素是rel_label,如果是predcls:[num_box!,3]
-        pred_2stage_rels = np.column_stack((pred_2stage_rel_inds, 1 + pred_2stage_scores[:, 1:].argmax(1)))
+
         pred_scores = rel_scores[:, 1:].max(1)#todo 为什么排除background? 因为不存在真正意义的no relation吧
 
-        pred_2stage_scores = pred_2stage_scores[:, 1:].max(1)
         '''gt_rels:[num_rel,3],gt_classes[num_box,],gt_boxes:[num_box,4]'''
         gt_triplets, gt_triplet_boxes, _ = _triplet(gt_rels, gt_classes, gt_boxes)#gt_triplets[sub_clss,rel_class,obj_class]
-        gt_2stage_triplets,gt_2stage_triplet_boxes, _ = _triplet(gt_2stage, gt_classes, gt_boxes)
+
         local_container["gt_triplets"] = gt_triplets
-        local_container["gt_2stage_triplets"] = gt_2stage_triplets
+
         local_container["gt_triplet_boxes"] = gt_triplet_boxes
         # local_container["gt_2stage_triplets"] = gt_2stage_triplets
 
         pred_triplets, pred_triplet_boxes, pred_triplet_scores = _triplet(#pred_triplet_scores:sub\pred\obj score
             pred_rels, pred_classes, pred_boxes, pred_scores, obj_scores
         )
-        '''for two stage'''
-        pred_2stage_triplets, pred_2stage_triplet_boxes, pred_2stage_triplet_scores = _triplet(  # pred_triplet_scores:sub\pred\obj score
-            pred_2stage_rels, pred_classes, pred_boxes, pred_2stage_scores, obj_scores
-        )
+
 
 
         # Compute recall. It's most efficient to match once and then do recall after
@@ -182,26 +178,40 @@ class SGRecall(SceneGraphEvaluation):
         )
         local_container["pred_to_gt"] = pred_to_gt
 
-        pred_to_gt_2stage = _compute_pred_matches(  # 返回的pred_to_gt不仅仅label对应，且sub\obj box坐标处于iou阈值之间
-            gt_2stage_triplets,
-            pred_2stage_triplets,
-            gt_2stage_triplet_boxes,
-            pred_2stage_triplet_boxes,
-            iou_thres,
-            phrdet=mode == "phrdet",
-        )
-        local_container["pred_to_gt_2stage"] = pred_to_gt_2stage
+
 
         for k in self.result_dict[mode + "_recall"]:
             # the following code are copied from Neural-MOTIFS
             match = reduce(np.union1d, pred_to_gt[:k])
             rec_i = float(len(match)) / float(gt_rels.shape[0])
             self.result_dict[mode + "_recall"][k].append(rec_i)
-        for k in self.result_dict[mode + "_2stagerecall"]:
-            # the following code are copied from Neural-MOTIFS
-            match = reduce(np.union1d, pred_to_gt_2stage[:k])
-            rec_i = float(len(match)) / float(gt_2stage.shape[0])
-            self.result_dict[mode + "_2stagerecall"][k].append(rec_i)
+        if cfg.MODEL.TWO_STAGE_ON:
+            pred_2stage_rel_inds = local_container['pred_2stage_rel_inds']
+            pred_2stage_scores = local_container['2stage_rel_scores']
+            gt_2stage = local_container['gt_2stage']  # [n,3],(sub_id, ob_id, pred_label)
+            pred_2stage_rels = np.column_stack((pred_2stage_rel_inds, 1 + pred_2stage_scores[:, 1:].argmax(1)))
+            pred_2stage_scores = pred_2stage_scores[:, 1:].max(1)
+            gt_2stage_triplets, gt_2stage_triplet_boxes, _ = _triplet(gt_2stage, gt_classes, gt_boxes)
+            local_container["gt_2stage_triplets"] = gt_2stage_triplets
+            '''for two stage'''
+            pred_2stage_triplets, pred_2stage_triplet_boxes, pred_2stage_triplet_scores = _triplet(
+                # pred_triplet_scores:sub\pred\obj score
+                pred_2stage_rels, pred_classes, pred_boxes, pred_2stage_scores, obj_scores
+            )
+            pred_to_gt_2stage = _compute_pred_matches(  # 返回的pred_to_gt不仅仅label对应，且sub\obj box坐标处于iou阈值之间
+                gt_2stage_triplets,
+                pred_2stage_triplets,
+                gt_2stage_triplet_boxes,
+                pred_2stage_triplet_boxes,
+                iou_thres,
+                phrdet=mode == "phrdet",
+            )
+            local_container["pred_to_gt_2stage"] = pred_to_gt_2stage
+            for k in self.result_dict[mode + "_2stagerecall"]:
+                # the following code are copied from Neural-MOTIFS
+                match = reduce(np.union1d, pred_to_gt_2stage[:k])
+                rec_i = float(len(match)) / float(gt_2stage.shape[0])
+                self.result_dict[mode + "_2stagerecall"][k].append(rec_i)
         return local_container
 
 
@@ -464,8 +474,7 @@ class SGMeanRecall(SceneGraphEvaluation):
     def collect_mean_recall_items(self, global_container, local_container, mode):
         pred_to_gt = local_container["pred_to_gt"]#list:4096。pred_to_gt指的是pred的triplet和gt triblet id的对应关系。可以一对多说明不管位置，只管label对应
         gt_rels = local_container["gt_rels"]#(sub_id, ob_id, pred_label)
-        pred_to_gt_2stage = local_container["pred_to_gt_2stage"]
-        gt_rels_2stage = local_container["gt_2stage"]
+
 
         for k in self.result_dict[mode + "_mean_recall_collect"]:#k=20\50\100
             # the following code are copied from Neural-MOTIFS
@@ -490,28 +499,31 @@ class SGMeanRecall(SceneGraphEvaluation):
                         float(recall_hit[n] / recall_count[n])
                     )
         #轮到第一阶段了
-        for k in self.result_dict[mode + "_2stage_mean_recall_collect"]:#k=20\50\100
-            # the following code are copied from Neural-MOTIFS
-            match = reduce(np.union1d, pred_to_gt_2stage[:k])#不管有多少rel pair,只取前k个正确的数量，除以gt的数量，所以比例不会超过1
-            # NOTE: by kaihua, calculate Mean Recall for each category independently
-            # this metric is proposed by: CVPR 2019 oral paper "Learning to Compose Dynamic Tree Structures for Visual Contexts"
-            recall_hit = [0] * self.num_cluster
-            recall_count = [0] * self.num_cluster
-            for idx in range(gt_rels_2stage.shape[0]):#gt_rels:[n,3]
-                local_label = gt_rels_2stage[idx, 2]
-                recall_count[int(local_label)] += 1
-                recall_count[0] += 1#0位数字代表整个recall
+        if cfg.MODEL.TWO_STAGE_ON:
+            pred_to_gt_2stage = local_container["pred_to_gt_2stage"]
+            gt_rels_2stage = local_container["gt_2stage"]
+            for k in self.result_dict[mode + "_2stage_mean_recall_collect"]:#k=20\50\100
+                # the following code are copied from Neural-MOTIFS
+                match = reduce(np.union1d, pred_to_gt_2stage[:k])#不管有多少rel pair,只取前k个正确的数量，除以gt的数量，所以比例不会超过1
+                # NOTE: by kaihua, calculate Mean Recall for each category independently
+                # this metric is proposed by: CVPR 2019 oral paper "Learning to Compose Dynamic Tree Structures for Visual Contexts"
+                recall_hit = [0] * self.num_cluster
+                recall_count = [0] * self.num_cluster
+                for idx in range(gt_rels_2stage.shape[0]):#gt_rels:[n,3]
+                    local_label = gt_rels_2stage[idx, 2]
+                    recall_count[int(local_label)] += 1
+                    recall_count[0] += 1#0位数字代表整个recall
 
-            for idx in range(len(match)):#match里的内容实际上是match的prop的编号
-                local_label = gt_rels_2stage[int(match[idx]), 2]#对应gt rel_triblet编号的gt rel_triblet类别
-                recall_hit[int(local_label)] += 1
-                recall_hit[0] += 1
+                for idx in range(len(match)):#match里的内容实际上是match的prop的编号
+                    local_label = gt_rels_2stage[int(match[idx]), 2]#对应gt rel_triblet编号的gt rel_triblet类别
+                    recall_hit[int(local_label)] += 1
+                    recall_hit[0] += 1
 
-            for n in range(self.num_cluster):#_mean_recall_collect就是对每个rel算的recall
-                if recall_count[n] > 0:
-                    self.result_dict[mode + "_2stage_mean_recall_collect"][k][n].append(
-                        float(recall_hit[n] / recall_count[n])
-                    )
+                for n in range(self.num_cluster):#_mean_recall_collect就是对每个rel算的recall
+                    if recall_count[n] > 0:
+                        self.result_dict[mode + "_2stage_mean_recall_collect"][k][n].append(
+                            float(recall_hit[n] / recall_count[n])
+                        )
 
     '''计算除background的rel的recall。把每个图片计算的recall(recall_collect取平均)'''
     def calculate_mean_recall(self, mode):#collect里每个rel是每个图的结果列表，recall_list是每个图取平均的结果：

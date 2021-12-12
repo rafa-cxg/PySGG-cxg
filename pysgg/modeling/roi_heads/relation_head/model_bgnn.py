@@ -801,7 +801,7 @@ class BGNNContext(nn.Module):
         refine_ent_feats_each_iters = [augment_obj_feat]
         pre_cls_logits_each_iter = []
 
-        for refine_iter in range(self.mp_pair_refine_iter):
+        for refine_iter in range(self.mp_pair_refine_iter):#relationawere
             pre_cls_logits = None
 
             pred_relatedness_scores = None
@@ -897,7 +897,7 @@ class BGNNContext(nn.Module):
 
                     continue
 
-            # graph module
+            # graph module 白写？永远跳不进来
             for t in range(self.update_step):
                 param_idx = 0
                 if not self.share_parameters_each_iter:

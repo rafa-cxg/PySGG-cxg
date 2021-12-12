@@ -251,7 +251,7 @@ def do_vg_evaluation(
 
         logger.info("evaluating relationship predictions..")
         for groundtruth, prediction in tqdm(zip(groundtruths, predictions), total=len(predictions)):#'relation_tuple':[sub_id\obj_id\rel]
-            evaluate_relation_of_one_image(groundtruth, prediction, global_container, evaluator)#local_container再此创建。该函数中，evaluater存储的各类metric函数库，实际计算结果都在每个函数的self.result_dict里面，已append list方式
+            evaluate_relation_of_one_image(groundtruth, prediction, global_container, evaluator,cfg)#local_container再此创建。该函数中，evaluater存储的各类metric函数库，实际计算结果都在每个函数的self.result_dict里面，已append list方式
 
         # calculate mean recall
         eval_mean_recall.calculate_mean_recall(mode)#上步仅仅collect recall item(每幅图),evaluater元素包括eval_mean_recall
@@ -401,7 +401,7 @@ def save_output(output_folder, groundtruths, predictions, dataset):
             json.dump(visual_info, f)
 
 
-def evaluate_relation_of_one_image(groundtruth, prediction, global_container, evaluator):
+def evaluate_relation_of_one_image(groundtruth, prediction, global_container, evaluator,cfg):
     """
     Returns:
         pred_to_gt: Matching from predicate to GT
@@ -410,10 +410,9 @@ def evaluate_relation_of_one_image(groundtruth, prediction, global_container, ev
     """
     # unpack all inputs
     mode = global_container['mode']
-
     local_container = {}
     local_container['gt_rels'] = groundtruth.get_field('relation_tuple').long().detach().cpu().numpy()#[23，3]
-    local_container['gt_2stage'] = groundtruth.get_field('2stage_tuple').long().detach().cpu().numpy()  # [23，3]
+
     # if there is no gt relations for current image, then skip it
     if len(local_container['gt_rels']) == 0:
         return
@@ -427,13 +426,14 @@ def evaluate_relation_of_one_image(groundtruth, prediction, global_container, ev
         'rel_pair_idxs').long().detach().cpu().numpy()  # sgdet:(#pred_rels, 2) eg(4096,2) .predcls:[num_box!,2]
     local_container['rel_scores'] = prediction.get_field(
         'pred_rel_scores').detach().cpu().numpy()  # (#pred_rels, num_pred_class)
-
-    local_container['pred_2stage_rel_inds'] = prediction.get_field(
-        'rel_2stage_pair_idx').long().detach().cpu().numpy()
-    local_container['2stage_rel_scores'] = prediction.get_field(
-        'two_stage_pred_rel_prob').detach().cpu().numpy()
-    # local_container['two_stage_pred_rel_prob']= prediction.get_field('two_stage_pred_rel_prob').detach().cpu().numpy()
-    local_container['pred_2stage_labels'] = prediction.get_field('pred_2stage_labels').detach().cpu().numpy()
+    if cfg.MODEL.TWO_STAGE_ON:
+        local_container['gt_2stage'] = groundtruth.get_field('2stage_tuple').long().detach().cpu().numpy()  # [23，3]
+        local_container['pred_2stage_rel_inds'] = prediction.get_field(
+            'rel_2stage_pair_idx').long().detach().cpu().numpy()
+        local_container['2stage_rel_scores'] = prediction.get_field(
+            'two_stage_pred_rel_prob').detach().cpu().numpy()
+        # local_container['two_stage_pred_rel_prob']= prediction.get_field('two_stage_pred_rel_prob').detach().cpu().numpy()
+        local_container['pred_2stage_labels'] = prediction.get_field('pred_2stage_labels').detach().cpu().numpy()
     # about objects
     local_container['pred_boxes'] = prediction.convert('xyxy').bbox.detach().cpu().numpy()  # (#pred_objs, 4) ifpredcls:数值和gt_boxes一样
     local_container['pred_classes'] = prediction.get_field(

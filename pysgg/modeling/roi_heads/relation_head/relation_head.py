@@ -134,6 +134,7 @@ class ROIRelationHead(torch.nn.Module):
                             rel_pair_idxs,#[num_prop*(num_prop-1),2]
                             gt_rel_binarys_matrix,#[num_prop,num_prop]
                         ) = self.samp_processor.gtbox_relsample(proposal, targets)#boxlist:num_image,对于predcls,proposals数目=targets
+                        rel_labels_all = rel_labels
                     else:
                         if self.cfg.MODEL.TWO_STAGE_HEAD.UNION_BOX:
                             proposals,rel_labels,rel_pair_idxs,gt_rel_binarys_matrix,_,_=kwargs.values()
@@ -161,6 +162,7 @@ class ROIRelationHead(torch.nn.Module):
                 rel_pair_idxs = self.samp_processor.prepare_test_pairs(#不超过设定的max relation数，就全部保留
                     features[0].device, proposal
                 )
+                proposals=proposal
             else:
                 proposals=kwargs['proposals']
                 rel_pair_idxs=kwargs['rel_pair_idxs']
@@ -267,7 +269,7 @@ class ROIRelationHead(torch.nn.Module):
                     sactter_two_stage_logits[:, 0] = proposal.get_field("two_stage_pred_rel_logits")[:, 0]
                     # sactter_two_stage_logits_batch.append(sactter_two_stage_logits)
                 else: sactter_two_stage_logits=proposal.get_field("two_stage_pred_rel_logits")
-                relation_logits[idx] = relation_logits[idx]+sactter_two_stage_logits
+                relation_logits[idx] = relation_logits[idx]+0#sactter_two_stage_logits
 
 
 

@@ -76,8 +76,8 @@ MODEL:
   MASK_ON: false
   RETINANET_ON: false
   META_ARCHITECTURE: GeneralizedRCNN
-#  PRETRAINED_DETECTOR_CKPT: checkpoints/detection/pretrained_faster_rcnn/vg_faster_det.pth
-  PRETRAINED_DETECTOR_CKPT: checkpoints/predcls-BGNNPredictor/only_1stage/model_0003600.pth
+  PRETRAINED_DETECTOR_CKPT: checkpoints/detection/pretrained_faster_rcnn/vg_faster_det.pth
+#  PRETRAINED_DETECTOR_CKPT: checkpoints/predcls-BGNNPredictor/only_1stage/model_0003600.pth
   RELATION_ON: true
   RESNETS:
     BACKBONE_OUT_CHANNELS: 256

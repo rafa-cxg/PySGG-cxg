@@ -419,8 +419,8 @@ def train(
 
         loss_dict = model(images, targets, logger=logger) #predcls:dict:4
 
-        # losses = sum(loss for loss in loss_dict.values())
-        losses=loss_dict['loss_two_stage']+2*loss_dict['loss_two_stage']+0.5*sum(loss for loss in loss_dict.values())
+        losses = sum(loss for loss in loss_dict.values())
+        # losses=loss_dict['loss_two_stage']+2*loss_dict['loss_two_stage']+0.5*sum(loss for loss in loss_dict.values())
         # reduce losses over all GPUs for logging purposes
         loss_dict_reduced = reduce_loss_dict(loss_dict)#
         losses_reduced = sum(loss for loss in loss_dict_reduced.values())
