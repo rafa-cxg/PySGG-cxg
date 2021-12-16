@@ -142,8 +142,35 @@ class RelationLossComputation(object):
             attri_loss = attri_loss * self.num_attri_cat / 20.0
             return attri_loss
 
-
-
+class DistributionLossComputation(object):
+    def __init__(self,size_average=True,mode='customed_ce'):
+        self.size_average = size_average
+        self.mode=mode
+        self.klloss=torch.nn.KLDivLoss()
+        self.cosloss =torch.nn.CosineEmbeddingLoss()
+        # self.mode='kl_loss'
+    def __call__(self, input, target,distributions):
+        input = cat(input, dim=0).float()
+        distributions = cat(distributions, dim=0).float()
+        if self.mode=='customed_ce':
+            logpt = F.log_softmax((input), dim=-1)#姑且先这样，后面考虑要不要sigmoid
+            loss= -(distributions > 0)*logpt
+            if self.size_average: return loss.mean()
+            else: return loss.sum()
+        if self.mode == 'kl_loss':
+            input = F.log_softmax((input), dim=-1)
+            loss=self.klloss(input,distributions)*500
+            if self.size_average:
+                return loss.mean()
+            else:
+                return loss.sum()
+        if self.mode == 'cos_loss':
+            label=torch.tensor([1]).repeat((input.size()[0])).cuda()
+            loss=self.cosloss(input,distributions,label)
+            if self.size_average:
+                return loss.mean()
+            else:
+                return loss.sum()
 class FocalLoss(nn.Module):
     def __init__(self, alpha=None,gamma=0, size_average=True):
         super(FocalLoss, self).__init__()
@@ -284,4 +311,8 @@ def make_two_stage_loss_evaluator(cfg):
         cfg.MODEL.NUM_REL_GROUP
     )
 
+    return loss_evaluator
+
+def make_loss_evaluator_distribution(cfg):
+    loss_evaluator = DistributionLossComputation(mode=cfg.MODEL.TWO_STAGE_HEAD.LOSS_TYPE)
     return loss_evaluator

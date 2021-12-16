@@ -46,7 +46,7 @@ class VGDataset(torch.utils.data.Dataset):
 
     def __init__(self, split, img_dir, roidb_file, dict_file, image_file, transforms=None,
                  filter_empty_rels=True, num_im=-1, num_val_im=5000, check_img_file=False,
-                 filter_duplicate_rels=True, filter_non_overlap=False, flip_aug=True):
+                 filter_duplicate_rels=True, filter_non_overlap=True, flip_aug=True):
         """
         Torch dataset for VisualGenome
         Parameters:

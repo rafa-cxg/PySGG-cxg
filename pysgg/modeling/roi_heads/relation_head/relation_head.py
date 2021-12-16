@@ -269,7 +269,7 @@ class ROIRelationHead(torch.nn.Module):
                     sactter_two_stage_logits[:, 0] = proposal.get_field("two_stage_pred_rel_logits")[:, 0]
                     # sactter_two_stage_logits_batch.append(sactter_two_stage_logits)
                 else: sactter_two_stage_logits=proposal.get_field("two_stage_pred_rel_logits")
-                relation_logits[idx] = relation_logits[idx]+0#sactter_two_stage_logits
+                relation_logits[idx] = relation_logits[idx]*sactter_two_stage_logits#sactter_two_stage_logits
 
 
 

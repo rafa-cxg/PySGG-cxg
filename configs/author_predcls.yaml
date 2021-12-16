@@ -1,7 +1,7 @@
 AMP_VERBOSE: false
 DATALOADER:
   ASPECT_RATIO_GROUPING: true
-  NUM_WORKERS: 0
+  NUM_WORKERS: 4
   SIZE_DIVISIBILITY: 32
 DATASETS:
   LOAD_PRECOMPUTE_DETECTION_BOX: false
@@ -11,8 +11,9 @@ DATASETS:
   - VG_stanford_filtered_with_attribute_train
   VAL:
   - VG_stanford_filtered_with_attribute_val
-DEBUG: False
+DEBUG: false
 DTYPE: float32
+EXPERIMENT_NAME: BGNN-3-3-learnable_scaling
 GLOBAL_BUFFER_ON: false
 GLOVE_DIR: datasets/vg/stanford_spilt/glove
 INPUT:
@@ -35,11 +36,22 @@ INPUT:
   SATURATION: 0.0
   TO_BGR255: true
   VERTICAL_FLIP_PROB_TRAIN: 0.0
-USE_CLUSTER: true #注意！正式训练时要设置为false
 MODEL:
-  TRAIN_FIRST_STAGE_ONLY: true
-  ATTRIBUTE_ON: false
   TWO_STAGE_ON: true
+  TWO_STAGE_HEAD:
+    loss_distribution: true
+    PURE_SENMENTIC: true
+    USE_GLOVE: true #只有在PURE_SEMENTIC为TRUE才起效
+    INDIVIDUAL_BOX: false
+    UNION_BOX: false  #union和indi不能同时为true
+    transformer_pos: false
+    HIDDEN_DIM: 1024
+    PREDICTOR: TwoStagePredictor
+    NUM_REL_GROUP: 50
+    BATCH_SIZE_PER_IMAGE: 1000
+    POSITIVE_FRACTION: 1
+    LOSS_TYPE: 'cos_loss' # 仅在loss_dist为true时成立
+  ATTRIBUTE_ON: false
   BACKBONE:
     CONV_BODY: R-101-FPN
     FREEZE_CONV_BODY_AT: 2
@@ -64,7 +76,7 @@ MODEL:
     RPN_HEAD_BLOCKS: 0
     SCALE_FACTOR: 1.0
     WIDTH_DIVISOR: 1
-  FLIP_AUG: true
+  FLIP_AUG: false
   FPN:
     USE_GN: false
     USE_RELU: false
@@ -74,10 +86,8 @@ MODEL:
     NUM_GROUPS: 32
   KEYPOINT_ON: false
   MASK_ON: false
-  RETINANET_ON: false
   META_ARCHITECTURE: GeneralizedRCNN
-  PRETRAINED_DETECTOR_CKPT: checkpoints/detection/pretrained_faster_rcnn/vg_faster_det.pth
-#  PRETRAINED_DETECTOR_CKPT: checkpoints/predcls-BGNNPredictor/only_1stage/model_0003600.pth
+  PRETRAINED_DETECTOR_CKPT: checkpoints/predcls-BGNNPredictor/(2021-07-16_08)BGNN-3-3-learnable_scaling(resampling)/predcls-BGNNPredictor/only_1stage/model_0008400.pth
   RELATION_ON: true
   RESNETS:
     BACKBONE_OUT_CHANNELS: 256
@@ -96,18 +106,40 @@ MODEL:
     TRANS_FUNC: BottleneckWithFixedBatchNorm
     WIDTH_PER_GROUP: 8
     WITH_MODULATED_DCN: false
-
-  TWO_STAGE_HEAD:
-    PURE_SENMENTIC: true
-    USE_GLOVE: true #只有在PURE_SEMENTIC为TRUE才起效
-    INDIVIDUAL_BOX: false
-    UNION_BOX: false  #union和indi不能同时为true
-    transformer_pos: false
-    HIDDEN_DIM: 1024
-    PREDICTOR: TwoStagePredictor
-    NUM_REL_GROUP: 50
-    BATCH_SIZE_PER_IMAGE: 1000
-    POSITIVE_FRACTION: 1
+  RETINANET:
+    ANCHOR_SIZES:
+    - 32
+    - 64
+    - 128
+    - 256
+    - 512
+    ANCHOR_STRIDES:
+    - 8
+    - 16
+    - 32
+    - 64
+    - 128
+    ASPECT_RATIOS:
+    - 0.5
+    - 1.0
+    - 2.0
+    BBOX_REG_BETA: 0.11
+    BBOX_REG_WEIGHT: 4.0
+    BG_IOU_THRESHOLD: 0.4
+    FG_IOU_THRESHOLD: 0.5
+    INFERENCE_TH: 0.05
+    LOSS_ALPHA: 0.25
+    LOSS_GAMMA: 2.0
+    NMS_TH: 0.4
+    NUM_CLASSES: 81
+    NUM_CONVS: 4
+    OCTAVE: 2.0
+    PRE_NMS_TOP_N: 1000
+    PRIOR_PROB: 0.01
+    SCALES_PER_OCTAVE: 3
+    STRADDLE_THRESH: 0
+    USE_C5: true
+  RETINANET_ON: false
   ROI_ATTRIBUTE_HEAD:
     ATTRIBUTE_BGFG_RATIO: 3
     ATTRIBUTE_BGFG_SAMPLE: true
@@ -151,9 +183,68 @@ MODEL:
     POST_NMS_PER_CLS_TOPN: 300
     SCORE_THRESH: 0.01
     USE_FPN: true
+  ROI_KEYPOINT_HEAD:
+    CONV_LAYERS:
+    - 512
+    - 512
+    - 512
+    - 512
+    - 512
+    - 512
+    - 512
+    - 512
+    FEATURE_EXTRACTOR: KeypointRCNNFeatureExtractor
+    MLP_HEAD_DIM: 1024
+    NUM_CLASSES: 17
+    POOLER_RESOLUTION: 14
+    POOLER_SAMPLING_RATIO: 0
+    POOLER_SCALES: &id001
+    - 0.0625
+    PREDICTOR: KeypointRCNNPredictor
+    RESOLUTION: 14
+    SHARE_BOX_FEATURE_EXTRACTOR: true
+  ROI_MASK_HEAD:
+    CONV_LAYERS:
+    - 256
+    - 256
+    - 256
+    - 256
+    DILATION: 1
+    FEATURE_EXTRACTOR: ResNet50Conv5ROIFeatureExtractor
+    MLP_HEAD_DIM: 1024
+    POOLER_RESOLUTION: 14
+    POOLER_SAMPLING_RATIO: 0
+    POOLER_SCALES: *id001
+    POSTPROCESS_MASKS: false
+    POSTPROCESS_MASKS_THRESHOLD: 0.5
+    PREDICTOR: MaskRCNNC4Predictor
+    RESOLUTION: 14
+    SHARE_BOX_FEATURE_EXTRACTOR: true
+    USE_GN: false
   ROI_RELATION_HEAD:
     ADD_GTBOX_TO_PROPOSAL_IN_TRAIN: true
     BATCH_SIZE_PER_IMAGE: 1000
+    BGNN_MODULE:
+      APPLY_GT: false
+      EDGE_FEATURES_REPRESENTATION: union
+      GATING_WITH_RELNESS_LOGITS: false
+      GRAPH_HIDDEN_DIM: 512
+      GRAPH_ITERATION_NUM: 3
+      ITERATE_MP_PAIR_REFINE: 3
+      LEARNABLE_SCALING_WEIGHT:
+      - 3.12
+      - 0.06
+      MP_ON_VALID_PAIRS: true
+      MP_VALID_PAIRS_NUM: 128
+      RELATION_CONFIDENCE_AWARE: true
+      RELNESS_MP_WEIGHTING: true
+      RELNESS_MP_WEIGHTING_SCORE_RECALIBRATION_METHOD: learnable_scaling
+      SHARE_PARAMETERS_EACH_ITER: false
+      SHARE_RELATED_MODEL_ACROSS_REFINE_ITER: false
+      SKIP_CONNECTION_ON_OUTPUT: false
+      SPLIT_GRAPH4OBJ_REL: false
+    BODY_CATE_DROP_RATE: 1.0
+    BODY_REPEAT_FACTOR: 0.018
     CAUSAL:
       AUXILIARY_LOSS: true
       CONTEXT_LAYER: motifs
@@ -173,8 +264,9 @@ MODEL:
     DATA_RESAMPLING: true
     DATA_RESAMPLING_METHOD: bilvl
     DATA_RESAMPLING_PARAM:
-      INSTANCE_DROP_RATE: 0.7
-      REPEAT_FACTOR: 0.1
+      INSTANCE_DROP_RATE: 1.2
+      REPEAT_DICT_DIR: ''
+      REPEAT_FACTOR: 0.13
     EDGE_FEATURES_REPRESENTATION: fusion
     EMBED_DIM: 200
     EVALUATE_REL_PROPOSAL: true
@@ -211,27 +303,65 @@ MODEL:
       REL_PRIOR_MATRIX_DIR: datasets/vg/stanford_spilt/kern_prior/rel_matrix.npy
       STATISTICS_PRIOR_KNOWLEDGE: true
     LABEL_SMOOTHING_LOSS: false
-    LONGTAIL_PART_DICT: [null, 'b', 't', 't', 't', 'b', 'b', 'b', 'h', 'b', 't', 'b', 't', 't', 't', 't', 'b',
-                                't', 't', 'b', 'h', 'b', 'h', 'b', 't', 'b', 't', 't', 't', 'h', 'h', 'h', 't', 'b',
-                                't', 'b', 't', 't', 'b', 't', 'b', 'b', 't', 'b', 't', 't', 'b', 'b', 'h', 'b', 'b']
+    LONGTAIL_PART_DICT:
+    - null
+    - b
+    - t
+    - t
+    - t
+    - b
+    - b
+    - b
+    - h
+    - b
+    - t
+    - b
+    - t
+    - t
+    - t
+    - t
+    - b
+    - t
+    - t
+    - b
+    - h
+    - b
+    - h
+    - b
+    - t
+    - b
+    - t
+    - t
+    - t
+    - h
+    - h
+    - h
+    - t
+    - b
+    - t
+    - b
+    - t
+    - t
+    - b
+    - t
+    - b
+    - b
+    - t
+    - b
+    - t
+    - t
+    - b
+    - b
+    - h
+    - b
+    - b
     MAX_PROPOSAL_PAIR: 4096
-    BGNN_MODULE:
+    MSDN_MODULE:
+      APPLY_GT: false
       EDGE_FEATURES_REPRESENTATION: union
-      GATING_WITH_RELNESS_LOGITS: false
       GRAPH_HIDDEN_DIM: 512
       GRAPH_ITERATION_NUM: 3
-      APPLY_GT: False
-      ITERATE_MP_PAIR_REFINE: 3
-      RELATION_CONFIDENCE_AWARE: True
-      MP_ON_VALID_PAIRS: True
-      MP_VALID_PAIRS_NUM: 128
-      RELNESS_MP_WEIGHTING: true
-      RELNESS_MP_WEIGHTING_SCORE_RECALIBRATION_METHOD: learnable_scaling
-      LEARNABLE_SCALING_WEIGHT: (3.12, 0.06)
-      SHARE_PARAMETERS_EACH_ITER: false
-      SHARE_RELATED_MODEL_ACROSS_REFINE_ITER: false
-      SKIP_CONNECTION_ON_OUTPUT: false
-      SPLIT_GRAPH4OBJ_REL: false
+      SHARE_PARAMETERS_EACH_ITER: true
     NUM_CLASSES: 51
     NUM_SAMPLE_PER_GT_REL: 4
     OBJECT_CLASSIFICATION_MANNER: replace
@@ -242,21 +372,21 @@ MODEL:
     PREDICT_USE_BIAS: true
     PREDICT_USE_VISION: true
     RELATION_PROPOSAL_MODEL:
-      FOCAL_LOSS_ALPHA: 0.2
-      FOCAL_LOSS_GAMMA: 2.0
       EVAL_MODEL_AUC: false
       FIX_MODEL_AT_ITER: 3000
+      FOCAL_LOSS_ALPHA: 0.2
+      FOCAL_LOSS_GAMMA: 2.0
       IGNORE_FOREGROUND_BOXES_PAIRS: false
       METHOD: RelAwareRelFeature
       PAIR_NUMS_AFTER_FILTERING: 128
       PRETRAIN_ITER_RELNESS_MODULE: 2000
       PRETRAIN_RELNESS_MODULE: true
       PRE_CLSER_LOSS: focal_fgbg_norm
-      REL_AWARE_PREDICTOR_TYPE: hybrid 
+      REL_AWARE_PREDICTOR_TYPE: hybrid
       SET_ON: true
       USE_RELATEDNESS_FOR_PREDICTION_RANKING: false
       USE_SAME_LABEL_WITH_CLSER: false
-      VISUAL_FEATURES_ON: True
+      VISUAL_FEATURES_ON: true
     REL_OBJ_MULTI_TASK_LOSS: false
     REL_PROP:
     - 0.01858
@@ -311,6 +441,7 @@ MODEL:
     - 0.02958
     REMOVE_TAIL_CLASSES: false
     REPEAT_DICT: ''
+    REPEAT_FACTOR: 0.02
     REQUIRE_BOX_OVERLAP: false
     RE_INITIALIZE_CLASSIFIER: false
     TAIL_REPEAT_FACTOR: 0.07
@@ -323,8 +454,8 @@ MODEL:
       REL_LAYER: 2
       VAL_DIM: 64
     USE_BINARY_LOSS: false
-    USE_GT_BOX: false
-    USE_GT_OBJECT_LABEL: false
+    USE_GT_BOX: true
+    USE_GT_OBJECT_LABEL: true
     USE_GT_OBJ_LABEL_FOR_EMBEDDING: false
     WORD_EMBEDDING_FEATURES: true
   RPN:
@@ -370,32 +501,31 @@ OUTPUT_DIR: checkpoints
 PATHS_CATALOG: pysgg/config/paths_catalog.py
 PATHS_DATA: pysgg/config/../data/datasets
 SOLVER:
-  BASE_LR: 0.008 #0.008
+  BASE_LR: 0.008
   BIAS_LR_FACTOR: 1
-  CHECKPOINT_PERIOD: 2000
+  CHECKPOINT_PERIOD: 4000
   CLIP_NORM: 5.0
   GAMMA: 0.5
   GRAD_NORM_CLIP: 5.0
-  IMS_PER_BATCH: 12
-  MAX_ITER: 40000
+  IMS_PER_BATCH: 9
+  MAX_ITER: 70000
   MOMENTUM: 0.9
   PRE_VAL: false
   PRINT_GRAD_FREQ: 4000
-  VAL_2STAGE: true
   SCHEDULE:
     COOLDOWN: 0
     FACTOR: 0.8
-    MAX_DECAY_STEP: 3
+    MAX_DECAY_STEP: 9
     PATIENCE: 3
     THRESHOLD: 0.001
     TYPE: WarmupReduceLROnPlateau
   STEPS:
   - 40000
   TO_VAL: true
-  UPDATE_SCHEDULE_DURING_LOAD: False
+  UPDATE_SCHEDULE_DURING_LOAD: false
   VAL_PERIOD: 2000
   WARMUP_FACTOR: 0.1
-  WARMUP_ITERS: 400
+  WARMUP_ITERS: 500
   WARMUP_METHOD: linear
   WEIGHT_DECAY: 1.0e-05
   WEIGHT_DECAY_BIAS: 0.0
@@ -410,7 +540,7 @@ TEST:
   DETECTIONS_PER_IMG: 100
   EXPECTED_RESULTS: []
   EXPECTED_RESULTS_SIGMA_TOL: 4
-  IMS_PER_BATCH: 1
+  IMS_PER_BATCH: 3
   RELATION:
     IOU_THRESHOLD: 0.5
     LATER_NMS_PREDICTION_THRES: 0.5

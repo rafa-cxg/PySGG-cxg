@@ -277,8 +277,8 @@ def train(
         logger,
         slow_heads=slow_heads,#空
         slow_ratio=2.5,
-        rl_factor=float(num_batch),
-        # rl_factor=1.0,
+        # rl_factor=float(num_batch),
+        rl_factor=1.0,
         except_weight_decay=except_weight_decay,
     )
     scheduler = make_lr_scheduler(cfg, optimizer, logger)
@@ -540,7 +540,7 @@ def train(
         # scheduler should be called after optimizer.step() in pytorch>=1.1.0
         # https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate
         # torch.cuda.empty_cache()
-        restart_scheduler=False
+        restart_scheduler=True
         if cfg.SOLVER.SCHEDULE.TYPE == "WarmupReduceLROnPlateau":# default no
             if restart_scheduler:
                 scheduler.step(val_result_value, epoch=iteration-start_iter)
@@ -719,7 +719,7 @@ def main():
     time_str = now.strftime("%Y-%m-%d_%H")
    
     cfg.OUTPUT_DIR = os.path.join(cfg.OUTPUT_DIR,
-    f"{mode}-{cfg.MODEL.ROI_RELATION_HEAD.PREDICTOR}",'only_1stage')
+    f"{mode}-{cfg.MODEL.ROI_RELATION_HEAD.PREDICTOR}",cfg.EXPERIMENT_NAME)
     # cfg.OUTPUT_DIR = os.path.join(
     #     cfg.OUTPUT_DIR,
     #     f"{mode}-{cfg.MODEL.ROI_RELATION_HEAD.PREDICTOR}",

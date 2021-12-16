@@ -809,7 +809,7 @@ class BGNNContext(nn.Module):
                 # input_features = refine_ent_feats_each_iters[-1]
 
                 input_features = refine_rel_feats_each_iters[-1]
-                if not self.shared_pre_rel_classifier:
+                if not self.shared_pre_rel_classifier: #false
                     pre_cls_logits, pred_relatedness_scores = self.relation_conf_aware_models[#RelAwareRelFeature cls_logit:torch.Size([num_pair, 51])
                         refine_iter
                     ](input_features, proposals, rel_pair_inds)
@@ -1020,7 +1020,7 @@ class BGNNContext(nn.Module):
 
         return (
             refine_ent_feats_each_iters[-1],#取-1，list有什么作用？
-            refine_rel_feats_each_iters[-1],#[num_prop,feat_dem]
+            refine_rel_feats_each_iters[-1],#[num_prop,feat_dem]#除了第一个之外，其他的内容一样的
             pre_cls_logits_each_iter,#list of each iter,每个iter[num_prop,num_rel_class]
             relatedness_each_iters,#训练时为none,测试时候为拼接值
         )

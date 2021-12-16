@@ -163,7 +163,7 @@ class TwoStagePredictor(nn.Module):
         rel_feats = self.relu(rel_feats)
         rel_cls_logits = self.rel_classifier2(rel_feats)  # [N,4]
         rel_cls_logits = self.BN2(rel_cls_logits)
-        rel_cls_logits=self.relu(rel_cls_logits)
+        rel_cls_logits=self.sigmoid(rel_cls_logits)
         num_objs = [len(b) for b in inst_proposals]
         num_rels = [r.shape[0] for r in rel_pair_idxs]
         assert len(num_rels) == len(num_objs)
@@ -173,7 +173,119 @@ class TwoStagePredictor(nn.Module):
 
         return  rel_cls_logits
 
+@registry.TWO_STAGE_PREDICTOR.register("TwoStageDISTPredictor")
+class TwoStageDISTPredictor(nn.Module):
+    def __init__(self, config, in_channels):
+        super(TwoStageDISTPredictor, self).__init__()
+        self.num_obj_cls = config.MODEL.ROI_BOX_HEAD.NUM_CLASSES
+        self.num_rel_cls = config.MODEL.TWO_STAGE_HEAD.NUM_REL_GROUP+1
+        self.use_bias = config.MODEL.ROI_RELATION_HEAD.FREQUENCY_BAIS
 
+        # mode
+        if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_BOX:
+            if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL:
+                self.mode = "predcls"
+            else:
+                self.mode = "sgcls"
+        else:
+            self.mode = "sgdet"
+
+        assert in_channels is not None
+        self.pooling_dim = cfg.MODEL.ROI_RELATION_HEAD.CONTEXT_POOLING_DIM#2048
+        self.word_dim=cfg.MODEL.ROI_RELATION_HEAD.EMBED_DIM
+        self.geometry_feat_dim = 128
+        self.input_dim = (in_channels+self.word_dim+self.geometry_feat_dim)*2#4096
+        if cfg.MODEL.TWO_STAGE_HEAD.PURE_SENMENTIC:
+            self.input_dim=2048+1024
+        self.hidden_dim = config.MODEL.TWO_STAGE_HEAD.HIDDEN_DIM#4096
+        #待定self.context_layer=
+        # post classification
+        self.rel_classifier1 = build_classifier(self.input_dim, self.hidden_dim)
+        self.rel_classifier2 = build_classifier(self.hidden_dim, self.num_rel_cls)
+        self. BN1=torch.nn.BatchNorm1d(self.hidden_dim)
+        self.BN2 = torch.nn.BatchNorm1d(self.num_rel_cls)
+        self.sigmoid = nn.Sigmoid()
+        self.relu=nn.LeakyReLU(0.2)
+        self.init_classifier_weight()
+
+        # for logging things
+        self.forward_time = 0
+
+
+
+    def init_classifier_weight(self):
+        self.rel_classifier1.reset_parameters()
+        self.rel_classifier2.reset_parameters()
+
+
+    def start_preclser_relpn_pretrain(self):
+        self.context_layer.set_pretrain_pre_clser_mode()
+
+    def end_preclser_relpn_pretrain(self):
+        self.context_layer.set_pretrain_pre_clser_mode(False)
+
+    def forward(
+        self,
+        inst_proposals,
+        rel_pair_idxs,
+        rel_labels,
+        rel_binarys,
+        roi_features,
+        union_features,
+        obj_rep,
+        embed,
+        logger=None,
+
+    ):
+        """
+
+        :param inst_proposals:
+        :param rel_pair_idxs:
+        :param rel_labels:
+        :param rel_binarys:
+            the box pairs with that match the ground truth [num_prp, num_prp]
+        :param roi_features:
+        :param union_features:
+        :param logger:
+
+        Returns:
+            obj_dists (list[Tensor]): logits of object label distribution
+            rel_dists (list[Tensor])
+            rel_pair_idxs (list[Tensor]): (num_rel, 2) index of subject and object
+            union_features (Tensor): (batch_num_rel, context_pooling_dim): visual union feature of each pair
+        """
+        '''obj_feats:[num_prop_all,512], rel_feats:[128,512]'''
+        #填写如何编码
+        # rel_feats = self.context_layer(
+        #     roi_features, union_features, inst_proposals, rel_pair_idxs, rel_binarys, logger
+        # )#[num_all_prop,4096],[num_all_pair,4096],list:boxlist,
+        if cfg.MODEL.TWO_STAGE_HEAD.transformer_pos:
+            rel_feats=[]
+            for idx, rel_pair_idx in enumerate(rel_pair_idxs):
+
+                # obj_mask = rel_pair_idx[:, 1].unsqueeze(-1).repeat(1, (4096+200+128)*2).unsqueeze(1)
+                # obj_pos_embed = (embed[idx].to('cuda').gather(1, obj_mask)).squeeze(1) + torch.cat((obj_rep[rel_pair_idx[:,0]],obj_rep[rel_pair_idx[:,1]]),-1)
+                obj_pos_embed = embed[idx].to('cuda')
+                rel_feats.append(obj_pos_embed)
+            rel_feats=torch.cat(rel_feats,0)
+        if cfg.MODEL.TWO_STAGE_HEAD.UNION_BOX:
+            rel_feats = union_features
+        if cfg.MODEL.TWO_STAGE_HEAD.PURE_SENMENTIC:
+            rel_feats =obj_rep
+        rel_feats = self.rel_classifier1(rel_feats)#[N,4]
+        rel_feats = self.BN1(rel_feats)
+        rel_feats = self.relu(rel_feats)
+        rel_cls_logits = self.rel_classifier2(rel_feats)  # [N,4]
+        rel_cls_logits = self.BN2(rel_cls_logits)
+        rel_cls_logits=F.softmax(rel_cls_logits)
+        num_objs = [len(b) for b in inst_proposals]
+        num_rels = [r.shape[0] for r in rel_pair_idxs]
+        assert len(num_rels) == len(num_objs)
+        rel_cls_logits = rel_cls_logits.split(num_rels, dim=0)#把混在一起的结果按照每张图rel数量划分
+
+
+
+        return  rel_cls_logits
 
 
 def make_Two_Stage_predictor(cfg, in_channels):#4096

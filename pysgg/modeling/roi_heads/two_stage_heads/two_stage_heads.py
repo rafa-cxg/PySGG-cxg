@@ -11,7 +11,7 @@ from pysgg.modeling.roi_heads.relation_head.rel_proposal_network.models import (
 )
 from pysgg.utils.visualize_graph import *
 from ..relation_head.inference import make_roi_relation_post_processor
-from ..relation_head.loss import make_two_stage_loss_evaluator
+from ..relation_head.loss import make_two_stage_loss_evaluator,make_loss_evaluator_distribution
 from ..relation_head.roi_relation_feature_extractors import make_roi_relation_feature_extractor
 from .two_stage_predictors import make_Two_Stage_predictor
 from ..relation_head.sampling import make_two_stage_samp_processor
@@ -86,9 +86,7 @@ class Two_Stage_Head(torch.nn.Module):
         '''外加ground'''
         self.predicateid2cluster[0]=0
 
-
-
-
+        self.loss_distribution=True if (cfg.MODEL.TWO_STAGE_HEAD.loss_distribution and  cfg.MODEL.TWO_STAGE_ON) else False
         # mode
         if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_BOX:
             if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL:
@@ -125,6 +123,7 @@ class Two_Stage_Head(torch.nn.Module):
 
         self.post_processor = make_roi_relation_post_processor(cfg)
         self.loss_evaluator_2stage = make_two_stage_loss_evaluator(cfg)
+        self.loss_evaluator_distribution = make_loss_evaluator_distribution(cfg)
         self.samp_processor = make_two_stage_samp_processor(cfg)
 
         self.rel_prop_on = self.cfg.MODEL.ROI_RELATION_HEAD.RELATION_PROPOSAL_MODEL.SET_ON
@@ -280,22 +279,28 @@ class Two_Stage_Head(torch.nn.Module):
                 logger)# 计算loss:RelAwareLoss. add_losses包括4个，分别对应4个iteration的predict预测loss RelAwareLoss
         else:
             sampling.update(rel_labels_2stage=rel_labels_2stage)#?
-            relation_logits = self.two_stage_predictor(features[4],**sampling)#[N_pair,num_group]
+            relation_logits = self.two_stage_predictor(features[3],**sampling)#[N_pair,num_group]
 
         # proposals, rel_pair_idxs, rel_pn_labels,relness_net_input,roi_features,union_features, None
         # for test
         for proposal, two_stage_logit,dist in zip(proposals, relation_logits,distribution):
             # two_stage_logit = F.softmax(two_stage_logit, -1)  # 传给第二阶段的logit限制在0-1
             proposal.del_field('center')
-            proposal.add_field("two_stage_pred_rel_logits", two_stage_logit*dist)#在cpu上运行
+            proposal.add_field("two_stage_pred_rel_logits", two_stage_logit)#在cpu上运行
 
         if not self.training:
             result =proposals
 
 
             return  result,sampling, {}
-
-        loss_relation = self.loss_evaluator_2stage(
+        if self.loss_distribution:
+            try:
+                distribution
+            except NameError:
+                print("Check in whether \"PURE_SENMENTIC\" is ON in cfg file!")
+            loss_relation =self.loss_evaluator_distribution(relation_logits,rel_labels_all,distribution)
+        else:
+            loss_relation = self.loss_evaluator_2stage(
             proposals, rel_labels_all, relation_logits
         )
         #torch.argmax(relation_logits[0][:,1:],-1)+1
@@ -347,7 +352,7 @@ class  make_pure_senmatic_feature(torch.nn.Module):
         )
         self.interact_embed = nn.Sequential(
             *[
-                make_fc(2, 1024),
+                make_fc(9*2+2, 1024),
                 nn.ReLU(inplace=True),
             ]
         )
@@ -361,10 +366,14 @@ class  make_pure_senmatic_feature(torch.nn.Module):
             self.mode = "sgdet"
 
     def forward(self,proposals,rel_pair_idxs,wordembedding_corpus):
-        rel_infos=(encode_rel_box_info(proposals, rel_pair_idxs))
+        prop_infos=encode_box_info(proposals)#x,y...
+
+
+        rel_infos=(encode_rel_box_info(proposals, rel_pair_idxs))#iou,distance
         sub_embed=[]
         obj_embed=[]
         interact_embeds=[]
+        pos_embed=[]
         # for image,rel_pair_idx in enumerate(rel_pair_idxs):
         #     sub_embed.append(self.sub_distribution[proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 0]]])
         #     obj_embed.append(self.obj_distribution[proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 1]]])
@@ -387,23 +396,25 @@ class  make_pure_senmatic_feature(torch.nn.Module):
         else:
             num=[len(proposal) for proposal in proposals]
             wordembedding_corpus = wordembedding_corpus.split(num, dim=0)
-            for image, (rel_pair_idx, rel_info,wordembedding) in enumerate(zip(rel_pair_idxs, rel_infos,wordembedding_corpus)):
-                interact_embed = self.interact_embed(rel_info)
-                interact_embeds.append(interact_embed)
+            prop_infos =  prop_infos.split(num, dim=0)
+            for image, (rel_pair_idx,wordembedding,prop_info,rel_info) in enumerate(zip(rel_pair_idxs,wordembedding_corpus,prop_infos,rel_infos)):
 
                 sub_embed.append(wordembedding[rel_pair_idx[:, 0]])
                 obj_embed.append(wordembedding[rel_pair_idx[:, 1]])
+                pos_embed.append(torch.cat((prop_info[rel_pair_idx[:, 0]],prop_info[rel_pair_idx[:, 1]],rel_info),1))
 
 
             sub_embed = self.sub_embed(torch.cat(sub_embed).cuda().type(torch.cuda.FloatTensor))
             obj_embed = self.obj_embed(torch.cat(obj_embed).cuda().type(torch.cuda.FloatTensor))
-        return  torch.cat((torch.cat((sub_embed,obj_embed),-1),torch.cat(interact_embeds)),dim=-1)
+            pos_embed= self.interact_embed(torch.cat(pos_embed,0))
+        return  torch.cat((sub_embed,obj_embed,pos_embed),-1)
 
 
 class  make_prior_distribution(torch.nn.Module):
     def __init__(self, cfg, in_channels):
         super(make_prior_distribution, self).__init__()
         self.cfg=cfg
+        self.softmax = nn.Softmax(dim=1)
         with open(os.path.join(self.cfg.OUTPUT_DIR, "record_sub_distribution.pkl"), 'rb') as f1:
             self.sub_distribution = torch.tensor(pickle.load(f1)).clone().detach().to('cuda')
         with open(os.path.join(self.cfg.OUTPUT_DIR, "record_obj_distribution.pkl"), 'rb') as f2:
@@ -420,9 +431,12 @@ class  make_prior_distribution(torch.nn.Module):
         embed=[]
         for image, rel_pair_idx in enumerate(rel_pair_idxs):
             if self.mode == 'predcls':
-                embed.append((self.sub_distribution[
-                                     proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 0]]]+1e-6)*(self.obj_distribution[
-                                     proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 1]]]+1e-6))
+                prior=((self.sub_distribution[
+                    proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 0]]]) * (
+                 self.obj_distribution[
+                     proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 1]]]))
+                prior=self.softmax(prior)
+                embed.append(prior)
 
             else:
                 # label=torch.argmax(proposals[image].get_field('predict_logits'),-1)
