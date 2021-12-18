@@ -88,8 +88,8 @@ class TwoStagePredictor(nn.Module):
         # post classification
         self.rel_classifier1 = build_classifier(self.input_dim, self.hidden_dim)
         self.rel_classifier2 = build_classifier(self.hidden_dim, self.num_rel_cls)
-        self. BN1=torch.nn.BatchNorm1d(self.hidden_dim)
-        self.BN2 = torch.nn.BatchNorm1d(self.num_rel_cls)
+        self.LN1=torch.nn.LayerNorm([self.hidden_dim])
+        self.LN2 = torch.nn.LayerNorm(51)
         self.sigmoid = nn.Sigmoid()
         self.relu=nn.LeakyReLU(0.2)
         self.init_classifier_weight()
@@ -159,10 +159,10 @@ class TwoStagePredictor(nn.Module):
         if cfg.MODEL.TWO_STAGE_HEAD.PURE_SENMENTIC:
             rel_feats =obj_rep
         rel_feats = self.rel_classifier1(rel_feats)#[N,4]
-        rel_feats = self.BN1(rel_feats)
+        # rel_feats = self.LN1(rel_feats)
         rel_feats = self.relu(rel_feats)
         rel_cls_logits = self.rel_classifier2(rel_feats)  # [N,4]
-        rel_cls_logits = self.BN2(rel_cls_logits)
+        # rel_cls_logits = self.LN2(rel_cls_logits)
         rel_cls_logits=self.sigmoid(rel_cls_logits)
         num_objs = [len(b) for b in inst_proposals]
         num_rels = [r.shape[0] for r in rel_pair_idxs]

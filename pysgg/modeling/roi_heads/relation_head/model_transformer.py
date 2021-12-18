@@ -50,7 +50,7 @@ class MultiHeadAttention(nn.Module):
         self.d_k = d_k
         self.d_v = d_v
 
-        self.w_qs = nn.Linear(d_model, n_head * d_k)
+        self.w_qs = nn.Linear(d_model, n_head * d_k)#q的矩阵
         self.w_ks = nn.Linear(d_model, n_head * d_k)
         self.w_vs = nn.Linear(d_model, n_head * d_v)
         nn.init.normal_(self.w_qs.weight, mean=0, std=np.sqrt(2.0 / (d_model + d_k)))
@@ -79,7 +79,7 @@ class MultiHeadAttention(nn.Module):
         """
         d_k, d_v, n_head = self.d_k, self.d_v, self.n_head
 
-        sz_b, len_q, _ = q.size()
+        sz_b, len_q, _ = q.size()#sz_b:size batch
         sz_b, len_k, _ = k.size()
         sz_b, len_v, _ = v.size() # len_k==len_v
 
@@ -99,7 +99,7 @@ class MultiHeadAttention(nn.Module):
         output = output.view(n_head, sz_b, len_q, d_v)
         output = output.permute(1, 2, 0, 3).contiguous().view(sz_b, len_q, -1) # b x lq x (n*dv)
 
-        output = self.dropout(self.fc(output))
+        output = self.dropout(self.fc(output))## b x lq x n_model
         output = self.layer_norm(output + residual)
 
         return output, attn
@@ -139,12 +139,12 @@ class EncoderLayer(nn.Module):
             n_head, d_model, d_k, d_v, dropout=dropout)
         self.pos_ffn = PositionwiseFeedForward(d_model, d_inner, dropout=dropout)
 
-    def forward(self, enc_input, non_pad_mask=None, slf_attn_mask=None):
-        enc_output, enc_slf_attn = self.slf_attn(
+    def forward(self, enc_input, non_pad_mask=None, slf_attn_mask=None):#enc意思是encode
+        enc_output, enc_slf_attn = self.slf_attn(#enc_output和enc_slf_attn区别是attention是没×V的
             enc_input, enc_input, enc_input, mask=slf_attn_mask)
         enc_output *= non_pad_mask.float()
 
-        enc_output = self.pos_ffn(enc_output)
+        enc_output = self.pos_ffn(enc_output)#代表fead forward网络
         enc_output *= non_pad_mask.float()
 
         return enc_output, enc_slf_attn
@@ -157,10 +157,10 @@ class TransformerEncoder(nn.Module):
     def __init__(self, n_layers, n_head, d_k, d_v, d_model, d_inner, dropout=0.1):
         super().__init__()
         self.layer_stack = nn.ModuleList([
-            EncoderLayer(d_model, d_inner, n_head, d_k, d_v, dropout=dropout)
+            EncoderLayer(d_model, d_inner, n_head, d_k, d_v, dropout=dropout)#包括multihead和positionwise
             for _ in range(n_layers)])
 
-    def forward(self, input_feats, num_objs):
+    def forward(self, input_feats, num_objs):#由一个encodelayer组成
         """
         Args:
             input_feats [Tensor] (#total_box, d_model) : bounding box features of a batch
@@ -213,7 +213,7 @@ class TransformerContext(nn.Module):
 
         self.dropout_rate = self.cfg.MODEL.ROI_RELATION_HEAD.TRANSFORMER.DROPOUT_RATE   
         self.obj_layer = self.cfg.MODEL.ROI_RELATION_HEAD.TRANSFORMER.OBJ_LAYER      
-        self.edge_layer = self.cfg.MODEL.ROI_RELATION_HEAD.TRANSFORMER.REL_LAYER        
+        self.edge_layer = self.cfg.MODEL.ROI_RELATION_HEAD.TRANSFORMER #2
         self.num_head = self.cfg.MODEL.ROI_RELATION_HEAD.TRANSFORMER.NUM_HEAD         
         self.inner_dim = self.cfg.MODEL.ROI_RELATION_HEAD.TRANSFORMER.INNER_DIM     
         self.k_dim = self.cfg.MODEL.ROI_RELATION_HEAD.TRANSFORMER.KEY_DIM         
@@ -222,7 +222,7 @@ class TransformerContext(nn.Module):
 
         # the following word embedding layer should be initalize by glove.6B before using
         embed_vecs = obj_edge_vectors(self.obj_classes, wv_dir=self.cfg.GLOVE_DIR, wv_dim=self.embed_dim)
-        self.obj_embed1 = nn.Embedding(self.num_obj_cls, self.embed_dim)
+        self.obj_embed1 = nn.Embedding(self.num_obj_cls, self.embed_dim)#一个针对object transformer一个是edge tran
         self.obj_embed2 = nn.Embedding(self.num_obj_cls, self.embed_dim)
         with torch.no_grad():
             self.obj_embed1.weight.copy_(embed_vecs, non_blocking=True)
@@ -236,7 +236,7 @@ class TransformerContext(nn.Module):
         self.lin_obj = nn.Linear(self.in_channels + self.embed_dim + 128, self.hidden_dim)
         self.lin_edge = nn.Linear(self.embed_dim + self.hidden_dim + self.in_channels, self.hidden_dim)
         self.out_obj = nn.Linear(self.hidden_dim, self.num_obj_cls)
-        self.context_obj = TransformerEncoder(self.obj_layer, self.num_head, self.k_dim, 
+        self.context_obj = TransformerEncoder(self.obj_layer, self.num_head, self.k_dim,
                                                 self.v_dim, self.hidden_dim, self.inner_dim, self.dropout_rate)
         self.context_edge = TransformerEncoder(self.edge_layer, self.num_head, self.k_dim, 
                                                 self.v_dim, self.hidden_dim, self.inner_dim, self.dropout_rate)
@@ -259,16 +259,16 @@ class TransformerContext(nn.Module):
         pos_embed = self.bbox_embed(encode_box_info(proposals))
 
         # encode objects with transformer
-        obj_pre_rep = cat((roi_features, obj_embed, pos_embed), -1)
+        obj_pre_rep = cat((roi_features, obj_embed, pos_embed), -1)#图像特征||word embedding|| position 但输入的object没有顺序
         num_objs = [len(p) for p in proposals]
         obj_pre_rep = self.lin_obj(obj_pre_rep)
-        obj_feats = self.context_obj(obj_pre_rep, num_objs)
+        obj_feats = self.context_obj(obj_pre_rep, num_objs)#TransformerEncoder
 
         # predict obj_dists and obj_preds
         if self.mode == 'predcls':
             obj_preds = obj_labels
             obj_dists = to_onehot(obj_preds, self.num_obj_cls)
-            edge_pre_rep = cat((roi_features, obj_feats, self.obj_embed2(obj_labels)), dim=-1)
+            edge_pre_rep = cat((roi_features, obj_feats, self.obj_embed2(obj_labels)), dim=-1)#图像特征||obj transformer|| word embedding
         else:
             obj_dists = self.out_obj(obj_feats)
             use_decoder_nms = self.mode == 'sgdet' and not self.training

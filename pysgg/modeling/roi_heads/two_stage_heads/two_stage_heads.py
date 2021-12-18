@@ -280,8 +280,7 @@ class Two_Stage_Head(torch.nn.Module):
         else:
             sampling.update(rel_labels_2stage=rel_labels_2stage)#?
             relation_logits = self.two_stage_predictor(features[3],**sampling)#[N_pair,num_group]
-
-        # proposals, rel_pair_idxs, rel_pn_labels,relness_net_input,roi_features,union_features, None
+         # proposals, rel_pair_idxs, rel_pn_labels,relness_net_input,roi_features,union_features, None
         # for test
         for proposal, two_stage_logit,dist in zip(proposals, relation_logits,distribution):
             # two_stage_logit = F.softmax(two_stage_logit, -1)  # 传给第二阶段的logit限制在0-1
@@ -429,19 +428,20 @@ class  make_prior_distribution(torch.nn.Module):
             self.mode = "sgdet"
     def forward(self,proposals,rel_pair_idxs):
         embed=[]
-        for image, rel_pair_idx in enumerate(rel_pair_idxs):
-            if self.mode == 'predcls':
-                prior=((self.sub_distribution[
-                    proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 0]]]) * (
-                 self.obj_distribution[
-                     proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 1]]]))
-                prior=self.softmax(prior)
-                embed.append(prior)
+        with torch.no_grad():
+            for image, rel_pair_idx in enumerate(rel_pair_idxs):
+                if self.mode == 'predcls':
+                    prior=((self.sub_distribution[
+                        proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 0]]]) * (
+                     self.obj_distribution[
+                         proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 1]]]))
+                    prior=torch.nn.functional.normalize(prior,p=1)
+                    embed.append(prior)
 
-            else:
-                # label=torch.argmax(proposals[image].get_field('predict_logits'),-1)
-                embed.append(self.sub_distribution[proposals[image].get_field('pred_labels').type(torch.LongTensor)[
-                    rel_pair_idx[:, 0]]]*self.obj_distribution[proposals[image].get_field('pred_labels').type(torch.LongTensor)[
-                    rel_pair_idx[:, 1]]])
+                else:
+                    # label=torch.argmax(proposals[image].get_field('predict_logits'),-1)
+                    embed.append(self.sub_distribution[proposals[image].get_field('pred_labels').type(torch.LongTensor)[
+                        rel_pair_idx[:, 0]]]*self.obj_distribution[proposals[image].get_field('pred_labels').type(torch.LongTensor)[
+                        rel_pair_idx[:, 1]]])
         return embed
         # return torch.cat(embed).cuda().type(torch.cuda.FloatTensor)

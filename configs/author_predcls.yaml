@@ -88,6 +88,7 @@ MODEL:
   MASK_ON: false
   META_ARCHITECTURE: GeneralizedRCNN
   PRETRAINED_DETECTOR_CKPT: checkpoints/predcls-BGNNPredictor/(2021-07-16_08)BGNN-3-3-learnable_scaling(resampling)/predcls-BGNNPredictor/only_1stage/model_0008400.pth
+#  PRETRAINED_DETECTOR_CKPT: checkpoints/predcls-BGNNPredictor/2st_dist_cos/model_0018000.pth
   RELATION_ON: true
   RESNETS:
     BACKBONE_OUT_CHANNELS: 256
@@ -515,7 +516,7 @@ SOLVER:
   SCHEDULE:
     COOLDOWN: 0
     FACTOR: 0.8
-    MAX_DECAY_STEP: 9
+    MAX_DECAY_STEP: 40
     PATIENCE: 3
     THRESHOLD: 0.001
     TYPE: WarmupReduceLROnPlateau

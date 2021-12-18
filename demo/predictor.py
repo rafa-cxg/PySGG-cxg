@@ -380,7 +380,7 @@ class COCODemo(object):
         #     l1=obj_labels[rel_pair_idx[0]]
         #     l2 = obj_labels[rel_pair_idx[1]]
         #过滤掉低于阈值的rel
-        keep = torch.nonzero(rel_scores > 0.010).squeeze(1)
+        keep = torch.nonzero(rel_scores > 0.015).squeeze(1)
         rel_labels = [self.PRE_CATEGORIES[i] for i in pred_rel_labels[keep]]
         obj_labels= [self.CATEGORIES[i] for i in pred_labels]
         colors = self.compute_colors_for_labels(pred_rel_labels[keep]).tolist()

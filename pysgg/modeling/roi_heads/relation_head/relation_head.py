@@ -82,7 +82,7 @@ class ROIRelationHead(torch.nn.Module):
         self.rel_prop_type = self.cfg.MODEL.ROI_RELATION_HEAD.RELATION_PROPOSAL_MODEL.METHOD
 
         self.object_cls_refine = cfg.MODEL.ROI_RELATION_HEAD.OBJECT_CLASSIFICATION_REFINE
-        self.pass_obj_recls_loss = cfg.MODEL.ROI_RELATION_HEAD.REL_OBJ_MULTI_TASK_LOSS
+        self.pass_obj_recls_loss = cfg.MODEL.ROI_RELATION_HEAD.REL_OBJ_MULTI_TASK_LOSS#如果是true,也更新object预测的loss
 
         # parameters
         self.use_union_box = self.cfg.MODEL.ROI_RELATION_HEAD.PREDICT_USE_VISION
@@ -269,7 +269,7 @@ class ROIRelationHead(torch.nn.Module):
                     sactter_two_stage_logits[:, 0] = proposal.get_field("two_stage_pred_rel_logits")[:, 0]
                     # sactter_two_stage_logits_batch.append(sactter_two_stage_logits)
                 else: sactter_two_stage_logits=proposal.get_field("two_stage_pred_rel_logits")
-                relation_logits[idx] = relation_logits[idx]*sactter_two_stage_logits#sactter_two_stage_logits
+                relation_logits[idx] = relation_logits[idx]+sactter_two_stage_logits#sactter_two_stage_logits
 
 
 

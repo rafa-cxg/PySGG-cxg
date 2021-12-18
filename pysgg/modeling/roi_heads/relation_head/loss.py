@@ -159,7 +159,7 @@ class DistributionLossComputation(object):
             else: return loss.sum()
         if self.mode == 'kl_loss':
             input = F.log_softmax((input), dim=-1)
-            loss=self.klloss(input,distributions)*500
+            loss=self.klloss(input,distributions)
             if self.size_average:
                 return loss.mean()
             else:
