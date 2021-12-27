@@ -354,14 +354,15 @@ def do_vg_evaluation(
 
         result_str += '=' * 100 + '\n'
         '''如果单训第一阶段'''
-        if cfg.SOLVER.VAL_2STAGE:
-            avg_metrics =np.mean(rel_eval_result_dict[mode + '_2stage_mean_recall'][100])
+        if cfg.SOLVER.VAL_2STAGE & cfg.MODEL.TRAIN_FIRST_STAGE_ONLY:
+            avg_metrics +=np.mean(rel_eval_result_dict[mode + '_2stage_mean_recall'][100])
 
         else:
             # average the all recall and mean recall with the weight
-            avg_metrics = np.mean(rel_eval_result_dict[mode + '_recall'][100]) * 0.5 \
-                      + np.mean(rel_eval_result_dict[mode + '_mean_recall'][100]) * 0.5
-
+            # avg_metrics += np.mean(rel_eval_result_dict[mode + '_recall'][100]) * 0.5 \
+            #           + np.mean(rel_eval_result_dict[mode + '_mean_recall'][100]) * 0.5
+            #目前我只想保留mean recall
+            avg_metrics +=np.mean(rel_eval_result_dict[mode + '_mean_recall'][100])
         if output_folder:
             torch.save(rel_eval_result_dict, os.path.join(output_folder, 'result_dict.pytorch'))
 

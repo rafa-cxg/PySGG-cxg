@@ -156,9 +156,9 @@ def get_dataset_statistics(cfg):
         factory = getattr(D, data["factory"])
         args = data["args"]
         dataset = factory(**args)
+        statistics.append(dataset.get_statistics())
         if "VG_stanford" in dataset_name:
             get_dataset_distribution(dataset, dataset_name)
-        statistics.append(dataset.get_statistics())
     logger.info('finish')
 
     assert len(statistics) == 1

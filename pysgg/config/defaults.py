@@ -298,6 +298,7 @@ _C.MODEL.TWO_STAGE_HEAD.loss_distribution=False
 _C.MODEL.TWO_STAGE_HEAD.LOSS_TYPE='kl_loss'
 
 _C.MODEL.ROI_RELATION_HEAD = CN()
+_C.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER=False
 # share box feature extractor should be set False for neural-motifs
 _C.MODEL.ROI_RELATION_HEAD.PREDICTOR = "MotifPredictor"
 _C.MODEL.ROI_RELATION_HEAD.FEATURE_EXTRACTOR = "RelationFeatureExtractor"

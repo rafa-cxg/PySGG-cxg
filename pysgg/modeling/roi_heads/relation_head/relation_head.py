@@ -1,13 +1,16 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 import json
+import pickle
 
 import torch
+from torch import nn
 
 from pysgg.modeling.roi_heads.relation_head.rel_proposal_network.models import (
     gt_rel_proposal_matching,
     RelationProposalModel,
     filter_rel_pairs,
 )
+
 from pysgg.utils.visualize_graph import *
 from .inference import make_roi_relation_post_processor
 from .loss import make_roi_relation_loss_evaluator
@@ -25,6 +28,8 @@ from pysgg.modeling.roi_heads.relation_head.model_kern import (
     to_onehot,
 )
 from ..two_stage_heads.two_stage_heads import make_Two_Stage_predictor
+from pysgg.modeling.make_layers import make_fc
+from .utils_motifs import obj_edge_vectors
 
 class ROIRelationHead(torch.nn.Module):
     """
@@ -153,9 +158,9 @@ class ROIRelationHead(torch.nn.Module):
                         ) = self.samp_processor.detect_relsample(proposal, targets)
                     else:
                         if self.cfg.MODEL.TWO_STAGE_HEAD.UNION_BOX:
-                            proposals, rel_labels,rel_labels_all, rel_pair_idxs, gt_rel_binarys_matrix,_,_ = kwargs.values()
+                            proposals, rel_labels,rel_labels_all, rel_pair_idxs, gt_rel_binarys_matrix,_ = kwargs.values()
                         else:
-                            proposals, rel_labels, rel_pair_idxs, gt_rel_binarys_matrix = kwargs.values()
+                            proposals, rel_labels,rel_labels_all,rel_pair_idxs, gt_rel_binarys_matrix = kwargs.values()
         else:
             rel_labels, rel_labels_all, gt_rel_binarys_matrix = None, None, None
             if kwargs == {}:  # 代表不用teostage
@@ -261,7 +266,7 @@ class ROIRelationHead(torch.nn.Module):
 
             # sactter_two_stage_logits_batch = []
             for idx, proposal in enumerate(proposals):
-                sactter_two_stage_logits = torch.zeros(proposal.get_field('two_stage_pred_rel_logits').size(0),self.cfg.MODEL.ROI_RELATION_HEAD.NUM_CLASSES).type(torch.DoubleTensor).to('cuda')
+                # sactter_two_stage_logits = torch.zeros(proposal.get_field('two_stage_pred_rel_logits').size(0),self.cfg.MODEL.ROI_RELATION_HEAD.NUM_CLASSES).type(torch.DoubleTensor).to('cuda')
                 if self.usecluster:
                     for key, value in self.predicate2cluster.items():
                         sactter_two_stage_logits[:, [int(i) for i in value]] = proposal.get_field(
@@ -269,7 +274,11 @@ class ROIRelationHead(torch.nn.Module):
                     sactter_two_stage_logits[:, 0] = proposal.get_field("two_stage_pred_rel_logits")[:, 0]
                     # sactter_two_stage_logits_batch.append(sactter_two_stage_logits)
                 else: sactter_two_stage_logits=proposal.get_field("two_stage_pred_rel_logits")
-                relation_logits[idx] = relation_logits[idx]+sactter_two_stage_logits#sactter_two_stage_logits
+                relation_logits[idx] = relation_logits[idx] + sactter_two_stage_logits  # sactter_two_stage_logits
+                # if self.visual_language_merger is not None:
+                #     self.visual_language_merger(relation_logits[idx],sactter_two_stage_logits)
+                # else:
+                #     relation_logits[idx] = relation_logits[idx]+sactter_two_stage_logits#sactter_two_stage_logits
 
 
 
@@ -331,3 +340,9 @@ def build_roi_relation_head(cfg, in_channels):
     and make it a parameter in the config
     """
     return ROIRelationHead(cfg, in_channels)
+
+
+
+
+
+

@@ -336,3 +336,4 @@ def make_two_stage_samp_processor(cfg):
         cfg.TEST.RELATION.REQUIRE_OVERLAP,
     )
     return samp_processor
+

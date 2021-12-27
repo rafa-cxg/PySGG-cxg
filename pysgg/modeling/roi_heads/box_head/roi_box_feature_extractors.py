@@ -112,7 +112,6 @@ class FPN2MLPFeatureExtractor(nn.Module):
     def forward(self, x, proposals):
         x = self.pooler(x, proposals)
         x = x.view(x.size(0), -1)
-
         x = F.relu(self.fc6(x))
         x = F.relu(self.fc7(x))
 

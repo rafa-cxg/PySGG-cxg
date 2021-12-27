@@ -1,4 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+import copy
 import json
 import pickle
 
@@ -198,8 +199,8 @@ class Two_Stage_Head(torch.nn.Module):
                         rel_pair_idxs,#[num_prop*(num_prop-1),2]
                         gt_rel_binarys_matrix,#[num_prop,num_prop]
                     ) = self.samp_processor.detect_relsample(proposals, targets)
-                    sampling=dict(proposals=proposals,rel_labels=rel_labels,rel_labels_all=rel_labels_all,rel_pair_idxs=rel_pair_idxs,gt_rel_binarys_matrix=gt_rel_binarys_matrix)
-
+                    sampling=dict(proposals=(proposals),rel_labels=copy.deepcopy(rel_labels),rel_labels_all=rel_labels_all,rel_pair_idxs=(rel_pair_idxs),gt_rel_binarys_matrix=gt_rel_binarys_matrix)
+                    # sampling={}
                 if self.cfg.USE_CLUSTER==True:
                     rel_labels_2stage = []
                     for rel_label in rel_labels:
@@ -285,7 +286,7 @@ class Two_Stage_Head(torch.nn.Module):
         for proposal, two_stage_logit,dist in zip(proposals, relation_logits,distribution):
             # two_stage_logit = F.softmax(two_stage_logit, -1)  # 传给第二阶段的logit限制在0-1
             proposal.del_field('center')
-            proposal.add_field("two_stage_pred_rel_logits", two_stage_logit)#在cpu上运行
+            proposal.add_field("two_stage_pred_rel_logits", two_stage_logit,is_custom=True)#在cpu上运行
 
         if not self.training:
             result =proposals

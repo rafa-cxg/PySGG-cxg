@@ -36,13 +36,15 @@ class BoxList(object):
         self.mode = mode
         self.extra_fields = {}
         self.triplet_extra_fields = []  # e.g. relation field, which is not the same size as object bboxes and should not respond to __getitem__ slicing v[item]
-
-    def add_field(self, field, field_data, is_triplet=False):
+        self.custom_extra_fields=[]
+    def add_field(self, field, field_data, is_triplet=False,is_custom=False):
         # if field in self.extra_fields:
         #     print('{} is already in extra_fields. Try to replace with new data. '.format(field))
         self.extra_fields[field] = field_data
         if is_triplet:
             self.triplet_extra_fields.append(field)
+        if is_custom:#任意维度tensor或者其他，不受影响
+            self.custom_extra_fields.append(field)
     def del_field(self, field):
         # if field in self.extra_fields:
         #     print('{} is already in extra_fields. Try to replace with new data. '.format(field))
@@ -228,8 +230,10 @@ class BoxList(object):
     def __getitem__(self, item):
         bbox = BoxList(self.bbox[item], self.size, self.mode)
         for k, v in self.extra_fields.items():
-            if k in self.triplet_extra_fields:
+            if k in self.triplet_extra_fields:#用在n*n矩阵上，严格说不是priplet
                 bbox.add_field(k, v[item][:,item], is_triplet=True)
+            if k in self.custom_extra_fields:
+                bbox.add_field(k, v, is_custom=True)
             else:
                 bbox.add_field(k, v[item])
         return bbox

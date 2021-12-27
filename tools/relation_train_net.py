@@ -41,7 +41,7 @@ from pysgg.data.build import compute_features
 import torch.distributed as dist
 from pysgg.utils.comm import all_gather
 
-from clustering import  clustering
+# from clustering import  clustering
 from pysgg.utils.comm import is_main_process
 # See if we can use apex.DistributedDataParallel instead of the torch default,
 # and enable mixed-precision via apex.amp
@@ -294,7 +294,7 @@ def train(
     )
     # todo, unless mark as resume, otherwise load from the pretrained checkpoint
     arguments = {}
-    if cfg.MODEL.PRETRAINED_DETECTOR_CKPT != "":
+    if cfg.MODEL.PRETRAINED_DETECTOR_CKPT != "":#todo 加入对先前训练最佳值的记录
         checkpoint=checkpointer.load(
             cfg.MODEL.PRETRAINED_DETECTOR_CKPT, with_optim=False,update_schedule=False , load_mapping=load_mapping
         )
@@ -384,6 +384,7 @@ def train(
     end = time.time()
     model.train()
     print_first_grad = True
+    recall_highest_setting = 0.35  # 暂时
     if cfg.USE_CLUSTER==True:
         if os.path.isfile(cfg.OUTPUT_DIR+'/cluster_on_dataset.pkl')==False:#存放数据集Instance的feature文件
             feature=compute_features(cluster_data_loader,len(cluster_data_loader.dataset))
@@ -401,6 +402,7 @@ def train(
             deepcluster = clustering.__dict__['Kmeans'](3)
         # clustering_loss = deepcluster.faiss_cluster(feature.to('cpu').numpy())
             clustering_loss = deepcluster.sklearn_cluster(feature.to('cpu').numpy())
+
     for iteration, (images, targets, _) in (enumerate(train_data_loader, start_iter)):
         torch.cuda.empty_cache()
         if any(len(target) < 1 for target in targets):
@@ -523,10 +525,6 @@ def train(
                 logger.info("relness module pretraining..")
         arguments["optimizer"] =optimizer
         arguments["scheduler"] = scheduler
-        if iteration % checkpoint_period == 0:#checkpoint_period=2000
-            checkpointer.save("model_{:07d}".format(iteration), **arguments)
-        if iteration == max_iter:
-            checkpointer.save("model_final", **arguments)
 
         val_result_value = None  # used for scheduler updating
         if cfg.SOLVER.TO_VAL and iteration % cfg.SOLVER.VAL_PERIOD == 0:
@@ -540,6 +538,12 @@ def train(
         # scheduler should be called after optimizer.step() in pytorch>=1.1.0
         # https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate
         # torch.cuda.empty_cache()
+        if iteration % checkpoint_period == 0 and val_result_value>recall_highest_setting:#checkpoint_period=2000
+            checkpointer.save("model_{:07d}".format(iteration), **arguments)
+            print("model_{:07d} beyond recall@100: recall_highest_setting".format(iteration,recall_highest_setting))
+            recall_highest_setting=val_result_value
+        if iteration == max_iter and val_result_value>recall_highest_setting:
+            checkpointer.save("model_final", **arguments)
         restart_scheduler=True
         if cfg.SOLVER.SCHEDULE.TYPE == "WarmupReduceLROnPlateau":# default no
             if restart_scheduler:
@@ -580,10 +584,21 @@ def set_train_modules(modules):
 
 
 def run_val(cfg, model, val_data_loaders, distributed, logger):
+
+    # mode
+    if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_BOX:
+        if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL:
+            mode = "predcls"
+        else:
+            mode = "sgcls"
+    else:
+        mode = "sgdet"
     if distributed:
         model = model.module
-    # iou_types = ("bbox",)
+
     iou_types = ()
+    # if mode=="sgdet":
+    #     iou_types = ("bbox",)
     if cfg.MODEL.MASK_ON:
         iou_types = iou_types + ("segm",)
     if cfg.MODEL.KEYPOINT_ON:
@@ -669,6 +684,7 @@ def run_test(cfg, model, distributed, logger):
 
 
 def main():
+
     torch.multiprocessing.set_start_method('forkserver')
     parser = argparse.ArgumentParser(description="PyTorch Relation Detection Training")
     parser.add_argument(

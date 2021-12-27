@@ -193,11 +193,11 @@ class VGDataset(torch.utils.data.Dataset):
 
     def get_statistics(self):
         fg_matrix, bg_matrix, rel_counter_init = get_VG_statistics(self,
-                                                 must_overlap=False)
+                                               must_overlap=False)#(151, 151, 51),(151, 151),(50)
         eps = 1e-3
-        bg_matrix += 1
-        fg_matrix[:, :, 0] = bg_matrix
-        pred_dist = fg_matrix / fg_matrix.sum(2)[:, :, None] + eps
+        bg_matrix += 1#强行使得没有0存在
+        fg_matrix[:, :, 0] = bg_matrix#bg_matrix类似共同发生的次数（必须overlap）且是对称矩阵
+        pred_dist = fg_matrix / fg_matrix.sum(2)[:, :, None] + eps#其实就是把51维求和标准化
 
         result = {
             'fg_matrix': torch.from_numpy(fg_matrix),
@@ -385,7 +385,7 @@ def get_VG_statistics(train_data, must_overlap=True):
             rel_counter[gtr] += 1
         # For the background, get all of the things that overlap.
         o1o2_total = gt_classes[np.array(
-            box_filter(gt_boxes, must_overlap=must_overlap), dtype=int)]
+            box_filter(gt_boxes, must_overlap=must_overlap), dtype=int)]#所有gt box但凡overlap的，两两组合
         for (o1, o2) in o1o2_total:
             bg_matrix[o1, o2] += 1
 
@@ -396,9 +396,9 @@ def box_filter(boxes, must_overlap=False):
     If no overlapping boxes, use all of them."""
     n_cands = boxes.shape[0]
 
-    overlaps = bbox_overlaps(boxes.astype(
+    overlaps = bbox_overlaps(boxes.astype(#[n,n]
         np.float), boxes.astype(np.float), to_move=0) > 0
-    np.fill_diagonal(overlaps, 0)
+    np.fill_diagonal(overlaps, 0)#对角线设置0
 
     all_possib = np.ones_like(overlaps, dtype=np.bool)
     np.fill_diagonal(all_possib, 0)
