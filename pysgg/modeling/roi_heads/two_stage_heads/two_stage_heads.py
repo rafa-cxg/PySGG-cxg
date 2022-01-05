@@ -298,6 +298,8 @@ class Two_Stage_Head(torch.nn.Module):
                 distribution
             except NameError:
                 print("Check in whether \"PURE_SENMENTIC\" is ON in cfg file!")
+
+
             loss_relation =self.loss_evaluator_distribution(relation_logits,rel_labels_all,distribution)
         else:
             loss_relation = self.loss_evaluator_2stage(

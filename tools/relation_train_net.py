@@ -32,7 +32,7 @@ from pysgg.utils.checkpoint import DetectronCheckpointer
 from pysgg.utils.checkpoint import clip_grad_norm
 from pysgg.utils import visualize_graph as vis_graph
 from pysgg.utils.collect_env import collect_env_info
-from pysgg.utils.comm import synchronize, get_rank, all_gather
+from pysgg.utils.comm import synchronize, get_rank, all_gather,get_world_size
 from pysgg.utils.logger import setup_logger, debug_print, TFBoardHandler_LEVEL
 from pysgg.utils.metric_logger import MetricLogger
 from pysgg.utils.miscellaneous import mkdir, save_config
@@ -296,7 +296,7 @@ def train(
     arguments = {}
     if cfg.MODEL.PRETRAINED_DETECTOR_CKPT != "":#todo 加入对先前训练最佳值的记录
         checkpoint=checkpointer.load(
-            cfg.MODEL.PRETRAINED_DETECTOR_CKPT, with_optim=False,update_schedule=False , load_mapping=load_mapping
+            cfg.MODEL.PRETRAINED_DETECTOR_CKPT, with_optim=True,update_schedule=True , load_mapping=load_mapping
         )
         if cfg.MODEL.PRETRAINED_DETECTOR_CKPT=='checkpoints/detection/pretrained_faster_rcnn/vg_faster_det.pth':#如果从detection模型开始训练，起始Iter应设置0
             arguments["iteration"]=0
@@ -384,7 +384,16 @@ def train(
     end = time.time()
     model.train()
     print_first_grad = True
-    recall_highest_setting = 0.35  # 暂时
+    if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_BOX:
+        if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL:
+            mode = "predcls"
+            recall_highest_setting = 0.36  # 暂时
+        else:
+            mode = "sgcls"
+    else:
+        mode = "sgdet"
+        recall_highest_setting = 0.1715  # 暂时
+
     if cfg.USE_CLUSTER==True:
         if os.path.isfile(cfg.OUTPUT_DIR+'/cluster_on_dataset.pkl')==False:#存放数据集Instance的feature文件
             feature=compute_features(cluster_data_loader,len(cluster_data_loader.dataset))
@@ -421,10 +430,23 @@ def train(
 
         loss_dict = model(images, targets, logger=logger) #predcls:dict:4
 
+
         losses = sum(loss for loss in loss_dict.values())
+        # synchronize()
+        bad_flag=0
+        if losses==0 or ('loss_two_stage' not in loss_dict.keys()):
+            print('counter nan: pass this iter\n')
+            print('print loss_dict: .{}'.format(loss_dict))
+            bad_flag=1
+            # num_gpus=get_world_size()
+            # get_rank() == 0
+            # optimizer.zero_grad()
+            # continue
         # losses=loss_dict['loss_two_stage']+2*loss_dict['loss_two_stage']+0.5*sum(loss for loss in loss_dict.values())
         # reduce losses over all GPUs for logging purposes
+
         loss_dict_reduced = reduce_loss_dict(loss_dict)#
+        # print('rank:{}'.format(get_rank()))
         losses_reduced = sum(loss for loss in loss_dict_reduced.values())
 
         meters.update(loss=losses_reduced, **loss_dict_reduced)
@@ -432,9 +454,9 @@ def train(
         # Note: If mixed precision is not used, this ends up doing nothing
         # Otherwise apply loss scaling for mixed-precision recipe
         # try:
+
         with amp.scale_loss(losses, optimizer) as scaled_losses:
             scaled_losses.backward()
-
         if not SHOW_COMP_GRAPH and get_rank() == 0:
             try:
                 g = vis_graph.visual_computation_graph(
@@ -555,7 +577,7 @@ def train(
                 break
         else:
             scheduler.step(epoch=iteration)
-           
+
 
     total_training_time = time.time() - start_training_time
     total_time_str = str(datetime.timedelta(seconds=total_training_time))

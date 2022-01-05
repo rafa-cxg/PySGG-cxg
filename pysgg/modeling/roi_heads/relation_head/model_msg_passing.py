@@ -163,9 +163,12 @@ class PairwiseFeatureExtractor(nn.Module):
             layer_init(self.rel_feature_up_dim, xavier=True)
         else:
             self.rel_feat_dim_not_match = False
-
-        self.pairwise_obj_feat_updim_fc = make_fc(self.hidden_dim + self.obj_dim + self.embed_dim,
+        if self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ:
+            self.pairwise_obj_feat_updim_fc = make_fc(self.hidden_dim + self.obj_dim + self.embed_dim+512,
                                                   self.hidden_dim * 2)
+        else:
+            self.pairwise_obj_feat_updim_fc = make_fc(self.hidden_dim + self.obj_dim + self.embed_dim,
+                                                      self.hidden_dim * 2)
 
         self.outdim = self.pooling_dim
         # position embedding
@@ -193,13 +196,21 @@ class PairwiseFeatureExtractor(nn.Module):
             )
 
         # map bidirectional hidden states of dimension self.hidden_dim*2 to self.hidden_dim
-        self.obj_hidden_linear = make_fc(self.obj_dim + self.embed_dim + self.geometry_feat_dim, self.hidden_dim)
+        if self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ:
+            self.obj_hidden_linear = make_fc(self.obj_dim + self.embed_dim + self.geometry_feat_dim+512, self.hidden_dim)
 
-        self.obj_feat_aug_finalize_fc = nn.Sequential(
-            make_fc(self.hidden_dim + self.obj_dim + self.embed_dim, self.pooling_dim),
-            nn.ReLU(inplace=True),
-        )
+            self.obj_feat_aug_finalize_fc = nn.Sequential(
+                make_fc(self.hidden_dim + self.obj_dim + self.embed_dim+512, self.pooling_dim),
+                nn.ReLU(inplace=True),
+            )
+        else:
+            self.obj_hidden_linear = make_fc(self.obj_dim + self.embed_dim + self.geometry_feat_dim,
+                                             self.hidden_dim)
 
+            self.obj_feat_aug_finalize_fc = nn.Sequential(
+                make_fc(self.hidden_dim + self.obj_dim + self.embed_dim, self.pooling_dim),
+                nn.ReLU(inplace=True),
+            )
         # untreated average features
 
     def moving_average(self, holder, input):

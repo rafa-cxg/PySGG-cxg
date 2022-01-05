@@ -1,11 +1,11 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="torch.distributed.launch23_2st_dist_cos" type="PythonConfigurationType" factoryName="Python" singleton="false">
+  <configuration default="false" name="torch.distributed.launch23_2st_dist_cos_tran" type="PythonConfigurationType" factoryName="Python" singleton="false">
     <module name="PySGG-cxg" />
     <option name="INTERPRETER_OPTIONS" value="" />
     <option name="PARENT_ENVS" value="true" />
     <envs>
       <env name="PYTHONUNBUFFERED" value="1" />
-      <env name="CUDA_VISIBLE_DEVICES" value="2,3" />
+      <env name="CUDA_VISIBLE_DEVICES" value="0,1,2,3" />
     </envs>
     <option name="SDK_HOME" value="sftp://root@10.193.5.194:10001/usr/bin/python3" />
     <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
@@ -21,7 +21,7 @@
       </option>
     </PathMappingSettings>
     <option name="SCRIPT_NAME" value="torch.distributed.launch" />
-    <option name="PARAMETERS" value="--master_port 153249 --nproc_per_node=2 tools/relation_train_net.py --config-file /root/PySGG-cxg/configs/author_predcls.yaml USE_CLUSTER False DEBUG False MODEL.PRETRAINED_DETECTOR_CKPT checkpoints/predcls-BGNNPredictor/2st_dist_cos/model_0021600.pth MODEL.TRAIN_FIRST_STAGE_ONLY False SOLVER.BASE_LR 0.0035 MODEL.TWO_STAGE_ON True MODEL.TWO_STAGE_HEAD.LOSS_TYPE 'cos_loss' SOLVER.IMS_PER_BATCH 8 TEST.IMS_PER_BATCH 2 DATALOADER.NUM_WORKERS 0 SOLVER.VAL_2STAGE True EXPERIMENT_NAME &quot;2st_dist_cos_sample&quot; SOLVER.VAL_PERIOD 400 SOLVER.CHECKPOINT_PERIOD 400 MODEL.ROI_RELATION_HEAD.USE_GT_BOX True MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL True MODEL.ROI_RELATION_HEAD.DATA_RESAMPLING_PARAM.REPEAT_FACTOR 0.13 MODEL.ROI_RELATION_HEAD.DATA_RESAMPLING_PARAM.INSTANCE_DROP_RATE 1.6" />
+    <option name="PARAMETERS" value="--master_port 163249 --nproc_per_node=4 tools/relation_train_net.py --config-file &quot;/root/PySGG-cxg/configs/author_predcls.yaml&quot; USE_CLUSTER False DEBUG False MODEL.TRAIN_FIRST_STAGE_ONLY False MODEL.TWO_STAGE_ON True MODEL.TWO_STAGE_HEAD.LOSS_TYPE 'cos_loss' SOLVER.IMS_PER_BATCH 32 TEST.IMS_PER_BATCH 4 DATALOADER.NUM_WORKERS 0 EXPERIMENT_NAME &quot;2st_dist_cos_unionobjfution_matrix&quot; MODEL.PRETRAINED_DETECTOR_CKPT &quot;checkpoints/predcls-BGNNPredictor/2st_dist_cos_unionobjfution_matrix/model_0006000.pth&quot; SOLVER.VAL_PERIOD 400 SOLVER.CHECKPOINT_PERIOD 400 MODEL.ROI_RELATION_HEAD.USE_GT_BOX True MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL True  MODEL.ROI_RELATION_HEAD.DATA_RESAMPLING_PARAM.REPEAT_FACTOR 0.13 MODEL.ROI_RELATION_HEAD.DATA_RESAMPLING_PARAM.INSTANCE_DROP_RATE 1.6 MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_EDGE True MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ True SOLVER.BASE_LR 0.006" />
     <option name="SHOW_COMMAND_LINE" value="false" />
     <option name="EMULATE_TERMINAL" value="false" />
     <option name="MODULE_MODE" value="true" />

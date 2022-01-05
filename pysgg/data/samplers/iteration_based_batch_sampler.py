@@ -15,17 +15,18 @@ class IterationBasedBatchSampler(BatchSampler):
 
     def __iter__(self):
         iteration = self.start_iter
-        while iteration <= self.num_iterations:
+        while iteration <= self.num_iterations:#todo 我不明白，难道每个iteration都重新赋值吗？没有意义啊
             # if the underlying sampler has a set_epoch method, like
             # DistributedSampler, used for making each process see
             # a different split of the dataset, then set it
             if hasattr(self.batch_sampler.sampler, "set_epoch"):
-                self.batch_sampler.sampler.set_epoch(iteration)
-            for batch in self.batch_sampler:
+                self.batch_sampler.sampler.set_epoch(iteration)#不同的初始iteration或者epoch,会随机更新一次整个数据集的编号排列
+            for batch in self.batch_sampler:#调用一次 batchsampler,过一整个子数据集
                 iteration += 1
                 if iteration > self.num_iterations:
                     break
                 yield batch
+            print('finish a epoch!')
 
     def __len__(self):
         return self.num_iterations

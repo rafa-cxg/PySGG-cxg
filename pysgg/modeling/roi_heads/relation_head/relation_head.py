@@ -73,7 +73,7 @@ class ROIRelationHead(torch.nn.Module):
         else:
             # the fix features head for extracting the instances ROI features for
             # obj detection
-            self.box_feature_extractor = make_roi_box_feature_extractor(cfg, in_channels)
+            self.box_feature_extractor = make_roi_box_feature_extractor(cfg, in_channels,for_relation=True)
             feat_dim = self.box_feature_extractor.out_channels
             if isinstance(self.box_feature_extractor, ResNet50Conv5ROIFeatureExtractor):
                 feat_dim = self.box_feature_extractor.flatten_out_channels
@@ -300,8 +300,10 @@ class ROIRelationHead(torch.nn.Module):
 
             return roi_features, result, {}
         if self.cfg.MODEL.TRAIN_FIRST_STAGE_ONLY == False:#是否单训第一阶段
+
+
             loss_relation, loss_refine = self.loss_evaluator(#RelationLossComputation loss_refine指的是object的loss
-                proposals, rel_labels, relation_logits, obj_refine_logits
+            proposals, rel_labels, relation_logits, obj_refine_logits
             )
 
             output_losses = dict()

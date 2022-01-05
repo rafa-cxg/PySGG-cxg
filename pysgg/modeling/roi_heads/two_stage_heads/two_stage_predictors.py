@@ -153,18 +153,28 @@ class TwoStagePredictor(nn.Module):
                 # obj_pos_embed = (embed[idx].to('cuda').gather(1, obj_mask)).squeeze(1) + torch.cat((obj_rep[rel_pair_idx[:,0]],obj_rep[rel_pair_idx[:,1]]),-1)
                 obj_pos_embed = embed[idx].to('cuda')
                 rel_feats.append(obj_pos_embed)
+
             rel_feats=torch.cat(rel_feats,0)
+
         if cfg.MODEL.TWO_STAGE_HEAD.UNION_BOX:
             rel_feats = union_features
         if cfg.MODEL.TWO_STAGE_HEAD.PURE_SENMENTIC:
             rel_feats =obj_rep
+            if torch.all(torch.isfinite(rel_feats)) != True:
+                print('fuck relationloss')
+                # num_objs = [len(b) for b in inst_proposals] torch.nonzero(torch.isfinite(torch.max(obj_rep, -1)[0])==False)
+                # rel_feats=rel_feats.split(num_objs,0)
+                # for rel_feat,inst_proposal in zip(rel_feats,inst_proposals)
+                #     inst_proposals[torch.isfinite(torch.max(rel_feat, -1)[0])]
         rel_feats = self.rel_classifier1(rel_feats)#[N,4]
         # rel_feats = self.LN1(rel_feats)
         rel_feats = self.relu(rel_feats)
         rel_cls_logits = self.rel_classifier2(rel_feats)  # [N,4]
         # rel_cls_logits = self.LN2(rel_cls_logits)
-        rel_cls_logits=self.sigmoid(rel_cls_logits)
+        # rel_cls_logits=self.sigmoid(rel_cls_logits)
+        rel_cls_logits = self.relu(rel_cls_logits)
         num_objs = [len(b) for b in inst_proposals]
+
         num_rels = [r.shape[0] for r in rel_pair_idxs]
         assert len(num_rels) == len(num_objs)
         rel_cls_logits = rel_cls_logits.split(num_rels, dim=0)#把混在一起的结果按照每张图rel数量划分

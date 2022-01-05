@@ -11,6 +11,7 @@ import sys
 from pysgg.modeling.utils import cat
 from  torch.multiprocessing import  Pool
 from functools import partial
+from pysgg.structures.boxlist_ops import boxlist_iou
 def normalize_sigmoid_logits(orig_logits):
     orig_logits = torch.sigmoid(orig_logits)
     orig_logits = orig_logits / (orig_logits.sum(1).unsqueeze(-1) + 1e-12)
@@ -156,12 +157,12 @@ def encode_rel_box_info(proposals,rel_pair_idxs):#todo 和上面的函数有很�
     assert proposals[0].mode == 'xyxy'
 
     sizes=[(proposal.size) for proposal in proposals]
-    proposals = [proposal.bbox for proposal in proposals]
+    proposals_box = [proposal.bbox for proposal in proposals]
     boxes_info = []
-    for proposal,rel_pair_idx,siz in zip(proposals,rel_pair_idxs,sizes):
+    for proposal_box,proposal,rel_pair_idx,siz in zip(proposals_box,proposals,rel_pair_idxs,sizes):
         sub_idx=rel_pair_idx[:,0]
         obj_idx = rel_pair_idx[:,1]
-        boxes = proposal[sub_idx]
+        boxes = proposal_box[sub_idx]
         img_size = siz
         wid = img_size[0]
         hei = img_size[1]
@@ -172,7 +173,7 @@ def encode_rel_box_info(proposals,rel_pair_idxs):#todo 和上面的函数有很�
         sub_x1, sub_y1, sub_x2, sub_y2 = boxes.split([1,1,1,1], dim=-1)
         assert wid * hei != 0
         '''obj_box'''
-        boxes = proposal[obj_idx]
+        boxes = proposal_box[obj_idx]
         img_size = siz
         wid = img_size[0]
         hei = img_size[1]
@@ -184,7 +185,8 @@ def encode_rel_box_info(proposals,rel_pair_idxs):#todo 和上面的函数有很�
         assert wid * hei != 0
         distance=torch.pow(( torch.pow((sub_x-obj_x)/wid,2)+torch.pow((sub_y-obj_y)/hei,2)),0.5)
 
-        iou=(sub_x2-obj_x1)*(sub_y2-obj_y1)/(obj_h*obj_w+sub_h*sub_w-(sub_x2-obj_x1)*(sub_y2-obj_y1))
+        # iou_=(sub_x2-obj_x1)*(sub_y2-obj_y1)/(obj_h*obj_w+sub_h*sub_w-(sub_x2-obj_x1)*(sub_y2-obj_y1))#错的
+        iou=torch.diag(boxlist_iou(proposal[sub_idx],proposal[obj_idx])).unsqueeze(-1)
         iou[iou<0]=0#+1e-12
         distance=distance#+1e-12#todo 我该不该只加等于0的？
         info =torch.cat((iou,distance), dim=1)# (iou - distance)/10

@@ -169,3 +169,16 @@ class WarmupReduceLROnPlateau(object):
 
         for param_group, lr in zip(self.optimizer.param_groups, self.get_lr()):
             param_group['lr'] = lr
+
+
+
+# class CosineAnnealingWarmRestarts(object):
+#     def __init__(
+#             self,
+#             optimizer,
+#             gamma=0.5,
+#             warmup_factor=1.0 / 3,
+#             warmup_iters=500,
+#             warmup_method="linear",
+#             last_epoch=-1,
+#             logger=None,

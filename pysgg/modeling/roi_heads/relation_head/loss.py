@@ -76,10 +76,19 @@ class RelationLossComputation(object):
         rel_labels = cat(rel_labels, dim=0)
         if len(torch.nonzero(rel_labels != -1)) == 0:
             loss_relation = None
-        else:
 
-            loss_relation = self.criterion_loss(relation_logits[rel_labels != -1],#交叉熵 relation_logits[128,51]
-                                                rel_labels[rel_labels != -1].long())
+        if torch.all(torch.isfinite(relation_logits)) != True:
+            print('fuck relationloss')#distributions[torch.isfinite(torch.max(input,-1)[0])]
+            rel_labels = rel_labels[torch.isfinite(torch.max(relation_logits,-1)[0])]
+            relation_logits=relation_logits[torch.isfinite(torch.max(relation_logits,-1)[0])]
+            # notnan=torch.where(torch.isfinite(relation_logits))
+            # relation_logits=relation_logits[notnan]
+            # rel_labels=rel_labels[notnan[:,0]]
+            # if torch.all(torch.isnan(relation_logits)) == True:
+            #     print('fuck cxg2')
+
+        loss_relation = self.criterion_loss(relation_logits[rel_labels != -1],#交叉熵 relation_logits[128,51]
+                                            rel_labels[rel_labels != -1].long())
 
         loss_refine_obj = self.criterion_loss(refine_obj_logits, fg_labels.long())#因为用的是gt,loss是0 【num_all_prop,151】
 
@@ -152,6 +161,13 @@ class DistributionLossComputation(object):
     def __call__(self, input, target,distributions):
         input = cat(input, dim=0).float()
         distributions = cat(distributions, dim=0).float()
+        if torch.all(torch.isfinite(input)) != True:
+            print('fuck 2stageloss')
+            distributions = distributions[torch.isfinite(torch.max(input,-1)[0])]
+            input=input[torch.isfinite(torch.max(input,-1)[0])]
+
+
+
         if self.mode=='customed_ce':
             logpt = F.log_softmax((input), dim=-1)#姑且先这样，后面考虑要不要sigmoid
             loss= -(distributions > 0)*logpt

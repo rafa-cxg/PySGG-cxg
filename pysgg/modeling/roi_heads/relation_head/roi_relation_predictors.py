@@ -672,7 +672,10 @@ class BGNNPredictor(nn.Module):
             for iters, each_iter_logit in enumerate(pre_cls_logits):
                 if len(squeeze_tensor(torch.nonzero(rel_labels != -1))) == 0:
                     loss_rel_pre_cls = None
-                loss_rel_pre_cls = self.rel_aware_loss_eval(each_iter_logit, rel_labels)#RelAwareLoss算loss. rel_labels:[128,]
+                if torch.all(torch.isfinite(each_iter_logit)) != True:
+                    print('fuck pre_classifier')
+                    loss_rel_pre_cls = None
+                else:loss_rel_pre_cls = self.rel_aware_loss_eval(each_iter_logit, rel_labels)#RelAwareLoss算loss. rel_labels:[128,]
 
 
 

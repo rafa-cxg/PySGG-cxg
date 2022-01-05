@@ -7,7 +7,7 @@ import torch.distributed as dist
 from torch.utils.data.sampler import Sampler
 
 
-class DistributedSampler(Sampler):
+class DistributedSampler(Sampler):#几个process就划分几个子数据集
     """Sampler that restricts data loading to a subset of the dataset.
     It is especially useful in conjunction with
     :class:`torch.nn.parallel.DistributedDataParallel`. In such case, each
@@ -54,7 +54,7 @@ class DistributedSampler(Sampler):
 
         # subsample
         offset = self.num_samples * self.rank
-        indices = indices[offset : offset + self.num_samples]
+        indices = indices[offset : offset + self.num_samples]#保证每个gpu读取的数据是不同范围的数据集图片编号
         assert len(indices) == self.num_samples
 
         return iter(indices)

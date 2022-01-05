@@ -1,0 +1,828 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="BranchesTreeState">
+    <expand>
+      <path>
+        <item name="ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="LOCAL_ROOT" type="e8cecc67:BranchNodeDescriptor" />
+      </path>
+    </expand>
+    <select />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="7b1edbd8-2891-439c-8585-926a99159d6b" name="Default Changelist" comment="add language to union feature, mean recall@100 achieve 37.68">
+      <change afterPath="$PROJECT_DIR$/.idea/webServers.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/PySGG-cxg.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/PySGG-cxg.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/deployment.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/deployment.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/author_predcls.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/configs/author_predcls.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pysgg/config/defaults.py" beforeDir="false" afterPath="$PROJECT_DIR$/pysgg/config/defaults.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pysgg/modeling/roi_heads/box_head/roi_box_feature_extractors.py" beforeDir="false" afterPath="$PROJECT_DIR$/pysgg/modeling/roi_heads/box_head/roi_box_feature_extractors.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/loss.py" beforeDir="false" afterPath="$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/loss.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/model_msg_passing.py" beforeDir="false" afterPath="$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/model_msg_passing.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/relation_head.py" beforeDir="false" afterPath="$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/relation_head.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/roi_relation_feature_extractors.py" beforeDir="false" afterPath="$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/roi_relation_feature_extractors.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/roi_relation_predictors.py" beforeDir="false" afterPath="$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/roi_relation_predictors.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pysgg/modeling/roi_heads/two_stage_heads/two_stage_heads.py" beforeDir="false" afterPath="$PROJECT_DIR$/pysgg/modeling/roi_heads/two_stage_heads/two_stage_heads.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tools/relation_train_net.py" beforeDir="false" afterPath="$PROJECT_DIR$/tools/relation_train_net.py" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="FlaskConsoleOptions" custom-start-script="import sys&#10;sys.path.extend([WORKING_DIR_AND_PYTHON_PATHS])&#10;from flask.cli import ScriptInfo&#10;locals().update(ScriptInfo(create_app=None).load_app().make_shell_context())&#10;print(&quot;Python %s on %s\nApp: %s [%s]\nInstance: %s&quot; % (sys.version, sys.platform, app.import_name, app.env, app.instance_path))">
+    <envs>
+      <env key="FLASK_APP" value="app" />
+    </envs>
+    <option name="myCustomStartScript" value="import sys&#10;sys.path.extend([WORKING_DIR_AND_PYTHON_PATHS])&#10;from flask.cli import ScriptInfo&#10;locals().update(ScriptInfo(create_app=None).load_app().make_shell_context())&#10;print(&quot;Python %s on %s\nApp: %s [%s]\nInstance: %s&quot; % (sys.version, sys.platform, app.import_name, app.env, app.instance_path))" />
+    <option name="myEnvs">
+      <map>
+        <entry key="FLASK_APP" value="app" />
+      </map>
+    </option>
+  </component>
+  <component name="Git.Pull.Settings">
+    <option name="OPTIONS">
+      <set>
+        <option value="REBASE" />
+      </set>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="master" />
+      </map>
+    </option>
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+    <option name="RESET_MODE" value="MIXED" />
+    <option name="UPDATE_TYPE" value="REBASE" />
+  </component>
+  <component name="GitSEFilterConfiguration">
+    <file-type-list>
+      <filtered-out-file-type name="LOCAL_BRANCH" />
+      <filtered-out-file-type name="REMOTE_BRANCH" />
+      <filtered-out-file-type name="TAG" />
+      <filtered-out-file-type name="COMMIT_BY_MESSAGE" />
+    </file-type-list>
+  </component>
+  <component name="JupyterTrust" id="8a395acf-23a1-4ec4-933e-d3b95f307349" />
+  <component name="ProjectId" id="1ywlpPoOFIUCeNbr1mcz5W74sKn" />
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">
+    <property name="ASKED_ADD_EXTERNAL_FILES" value="true" />
+    <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
+    <property name="WebServerToolWindowFactoryState" value="true" />
+    <property name="WebServerToolWindowPanel.toolwindow.highlight.mappings" value="true" />
+    <property name="WebServerToolWindowPanel.toolwindow.highlight.symlinks" value="true" />
+    <property name="WebServerToolWindowPanel.toolwindow.show.date" value="false" />
+    <property name="WebServerToolWindowPanel.toolwindow.show.permissions" value="false" />
+    <property name="WebServerToolWindowPanel.toolwindow.show.size" value="false" />
+    <property name="credentialsType com.jetbrains.python.remote.PyCreateRemoteInterpreterDialog$PyCreateRemoteSdkForm" value="Web Deployment" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+    <property name="node.js.detected.package.eslint" value="true" />
+    <property name="node.js.path.for.package.eslint" value="project" />
+    <property name="node.js.path.for.package.tslint" value="project" />
+    <property name="node.js.selected.package.eslint" value="(autodetect)" />
+    <property name="node.js.selected.package.tslint" value="(autodetect)" />
+    <property name="run.code.analysis.last.selected.profile" value="aDefault" />
+    <property name="settings.editor.selected.configurable" value="com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable" />
+  </component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\cps\PycharmProjects\PySGG-cxg\pysgg\modeling\roi_heads\two_stage_heads" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\cps\PycharmProjects\PySGG-cxg\checkpoints\predcls-BGNNPredictor" />
+      <recent name="C:\Users\cps\PycharmProjects\PySGG-cxg\pysgg\modeling\roi_heads" />
+    </key>
+  </component>
+  <component name="RunManager" selected="Python.torch.distributed.launch23_2st_dist_cos_trans">
+    <configuration name="realtime_inference" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="PySGG-cxg" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+        <env name="CUDA_VISIBLE_DEVICES" value="1" />
+        <env name="QT_DEBUG_PLUGINS" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="sftp://root@10.193.5.194:10001/usr/bin/python3" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/visualization/realtime_inference.py" />
+      <option name="PARAMETERS" value="--config-file &quot;configs/author_predcls.yaml&quot; MODEL.ROI_RELATION_HEAD.USE_GT_BOX False MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL False SOLVER.IMS_PER_BATCH 2" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="test" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <module name="PySGG-cxg" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+        <env name="CUDA_VISIBLE_DEVICES" value="2,3" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="torch.distributed.launch" />
+      <option name="PARAMETERS" value="--master_port 10029 --nproc_per_node=2 &quot;/root/PySGG-cxg//tools/relation_test_net.py&quot; --config-file &quot;/root/PySGG-cxg/checkpoints/predcls-BGNNPredictor/cxg2/config.yml&quot; TEST.IMS_PER_BATCH 2 MODEL.WEIGHT &quot;/root/PySGG-cxg/checkpoints/predcls-BGNNPredictor/cxg2/model_0004800.pth&quot; MODEL.ROI_RELATION_HEAD.EVALUATE_REL_PROPOSAL False DATASETS.TEST &quot;('VG_stanford_filtered_with_attribute_test', )&quot;" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="true" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="torch.distributed.launch01" type="PythonConfigurationType" factoryName="Python">
+      <module name="PySGG-cxg" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+        <env name="CUDA_VISIBLE_DEVICES" value="0,1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="torch.distributed.launch" />
+      <option name="PARAMETERS" value="--master_port 12324 --nproc_per_node=2 tools/relation_train_net.py --config-file /root/PySGG-cxg/configs/e2e_relBGNN_vg.yaml DEBUG False SOLVER.IMS_PER_BATCH 12 TEST.IMS_PER_BATCH 2 DATALOADER.NUM_WORKERS 0 EXPERIMENT_NAME &quot;BGNN-10-2&quot; SOLVER.VAL_PERIOD 400 SOLVER.CHECKPOINT_PERIOD 1200 MODEL.ROI_RELATION_HEAD.USE_GT_BOX True MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL True" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="true" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="torch.distributed.launch23" type="PythonConfigurationType" factoryName="Python" singleton="false">
+      <module name="PySGG-cxg" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+        <env name="CUDA_VISIBLE_DEVICES" value="2,3" />
+        <env name="LD_LIBRARY_PATH" value="/anaconda3/envs/rafa/lib/python3.8/lib" />
+      </envs>
+      <option name="SDK_HOME" value="sftp://root@10.193.5.194:10001/usr/bin/python3" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="torch.distributed.launch" />
+      <option name="PARAMETERS" value="--master_port 123288 --nproc_per_node=2 tools/relation_train_net.py --config-file /root/PySGG-cxg/configs/author_predcls.yaml USE_CLUSTER False DEBUG False MODEL.TRAIN_FIRST_STAGE_ONLY False MODEL.TWO_STAGE_ON False SOLVER.IMS_PER_BATCH 20 TEST.IMS_PER_BATCH 2 DATALOADER.NUM_WORKERS 0 EXPERIMENT_NAME &quot;BGNN-10-2&quot; SOLVER.VAL_PERIOD 400 SOLVER.CHECKPOINT_PERIOD 1200 MODEL.ROI_RELATION_HEAD.USE_GT_BOX True MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL True" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="true" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="torch.distributed.launch23_2st_dist" type="PythonConfigurationType" factoryName="Python" singleton="false">
+      <module name="PySGG-cxg" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+        <env name="CUDA_VISIBLE_DEVICES" value="2,3" />
+        <env name="LD_LIBRARY_PATH" value="/anaconda3/envs/rafa/lib/python3.8/lib" />
+      </envs>
+      <option name="SDK_HOME" value="sftp://root@10.193.5.194:10001/usr/bin/python3" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="torch.distributed.launch" />
+      <option name="PARAMETERS" value="--master_port 123249 --nproc_per_node=2 tools/relation_train_net.py --config-file /root/PySGG-cxg/configs/author_predcls.yaml USE_CLUSTER False DEBUG False MODEL.TRAIN_FIRST_STAGE_ONLY False MODEL.TWO_STAGE_ON True SOLVER.IMS_PER_BATCH 6 TEST.IMS_PER_BATCH 2 DATALOADER.NUM_WORKERS 0 EXPERIMENT_NAME &quot;2st_dist&quot; SOLVER.VAL_PERIOD 400 SOLVER.CHECKPOINT_PERIOD 1200 MODEL.ROI_RELATION_HEAD.USE_GT_BOX True MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL True" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="true" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="torch.distributed.launch23_2st_dist_cos_trans" type="PythonConfigurationType" factoryName="Python" singleton="false">
+      <module name="PySGG-cxg" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+        <env name="CUDA_VISIBLE_DEVICES" value="2,3" />
+      </envs>
+      <option name="SDK_HOME" value="sftp://root@10.193.5.194:10001/usr/bin/python3" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="torch.distributed.launch" />
+      <option name="PARAMETERS" value="--master_port 153249 --nproc_per_node=2 tools/relation_train_net.py --config-file /root/PySGG-cxg/configs/author_predcls.yaml USE_CLUSTER False DEBUG False MODEL.TRAIN_FIRST_STAGE_ONLY False MODEL.TWO_STAGE_ON True MODEL.TWO_STAGE_HEAD.LOSS_TYPE 'cos_loss' SOLVER.IMS_PER_BATCH 16 TEST.IMS_PER_BATCH 2 DATALOADER.NUM_WORKERS 0 SOLVER.VAL_2STAGE True MODEL.PRETRAINED_DETECTOR_CKPT &quot;checkpoints/detection/pretrained_faster_rcnn/vg_faster_det.pth&quot; EXPERIMENT_NAME &quot;2st_dist_cos_unionobjfution_matrix&quot; SOLVER.VAL_PERIOD 400 SOLVER.CHECKPOINT_PERIOD 400 MODEL.ROI_RELATION_HEAD.USE_GT_BOX True MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL True MODEL.ROI_RELATION_HEAD.DATA_RESAMPLING_PARAM.REPEAT_FACTOR 0.13 MODEL.ROI_RELATION_HEAD.DATA_RESAMPLING_PARAM.INSTANCE_DROP_RATE 1.6 MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ True MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_EDGE True SOLVER.BASE_LR 0.03" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="true" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="torch.distributed.launch23_2st_dist_cos_unionfution_matrix_3conv" type="PythonConfigurationType" factoryName="Python" singleton="false">
+      <module name="PySGG-cxg" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+        <env name="CUDA_VISIBLE_DEVICES" value="1,2" />
+      </envs>
+      <option name="SDK_HOME" value="sftp://root@10.193.5.194:10001/usr/bin/python3" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="torch.distributed.launch" />
+      <option name="PARAMETERS" value="--master_port 153249 --nproc_per_node=2 tools/relation_train_net.py --config-file &quot;/root/PySGG-cxg/configs/author_predcls.yaml&quot; USE_CLUSTER False DEBUG False MODEL.TRAIN_FIRST_STAGE_ONLY False MODEL.TWO_STAGE_ON True MODEL.TWO_STAGE_HEAD.LOSS_TYPE 'cos_loss' SOLVER.IMS_PER_BATCH 6 TEST.IMS_PER_BATCH 2 DATALOADER.NUM_WORKERS 0 EXPERIMENT_NAME &quot;2st_dist_cos_unionfution_matrix_3conv&quot; MODEL.PRETRAINED_DETECTOR_CKPT &quot;checkpoints/predcls-BGNNPredictor/2st_dist_cos_sample/model_0044000.pth&quot; SOLVER.VAL_PERIOD 400 SOLVER.CHECKPOINT_PERIOD 400 MODEL.ROI_RELATION_HEAD.USE_GT_BOX True MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL True MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER True MODEL.ROI_RELATION_HEAD.DATA_RESAMPLING_PARAM.REPEAT_FACTOR 0.13 MODEL.ROI_RELATION_HEAD.DATA_RESAMPLING_PARAM.INSTANCE_DROP_RATE 1.6 MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER True" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="true" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="torch.distributed.launch23_2st_dist_cos_unionfution_matrix_mul" type="PythonConfigurationType" factoryName="Python" singleton="false">
+      <module name="PySGG-cxg" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+        <env name="CUDA_VISIBLE_DEVICES" value="0,1,2" />
+      </envs>
+      <option name="SDK_HOME" value="sftp://root@10.193.5.194:10001/usr/bin/python3" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="torch.distributed.launch" />
+      <option name="PARAMETERS" value="--master_port 151242 --nproc_per_node=3 tools/relation_train_net.py --config-file &quot;/root/PySGG-cxg/configs/author_predcls.yaml&quot; USE_CLUSTER False DEBUG False MODEL.TRAIN_FIRST_STAGE_ONLY False MODEL.TWO_STAGE_ON True MODEL.TWO_STAGE_HEAD.LOSS_TYPE 'cos_loss' SOLVER.IMS_PER_BATCH 18 TEST.IMS_PER_BATCH 3 DATALOADER.NUM_WORKERS 0 EXPERIMENT_NAME &quot;2st_dist_cos_unionfution_matrix&quot; MODEL.PRETRAINED_DETECTOR_CKPT &quot;checkpoints/predcls-BGNNPredictor/2st_dist_cos_predcls_unionfeaturefusion_matix/model_0054000.pth&quot; SOLVER.VAL_PERIOD 400 SOLVER.CHECKPOINT_PERIOD 400 MODEL.ROI_RELATION_HEAD.USE_GT_BOX False MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL False MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_EDGE True MODEL.ROI_RELATION_HEAD.DATA_RESAMPLING_PARAM.REPEAT_FACTOR 0.13 MODEL.ROI_RELATION_HEAD.DATA_RESAMPLING_PARAM.INSTANCE_DROP_RATE 1.6" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="true" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="visualize_PredCls_and_SGCls" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="PySGG-cxg" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+        <env name="CUDA_VISIBLE_DEVICES" value="0" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/visualization/visualize_PredCls_and_SGCls.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <list>
+      <item itemvalue="Python.torch.distributed.launch01" />
+      <item itemvalue="Python.torch.distributed.launch23_2st_dist_cos" />
+      <item itemvalue="Python.torch.distributed.launch23_2st_dist_cos_trans" />
+      <item itemvalue="Python.torch.distributed.launch23_2st_dist_cos_unionfution_matrix_3conv" />
+      <item itemvalue="Python.torch.distributed.launch23_2st_dist_cos_unionfution_matrix_mul" />
+      <item itemvalue="Python.torch.distributed.launch23" />
+      <item itemvalue="Python.torch.distributed.launch23_2st_dist" />
+      <item itemvalue="Python.torch.distributed.launch23_2st_dist_kl" />
+      <item itemvalue="Python.visualize_PredCls_and_SGCls" />
+      <item itemvalue="Python.test" />
+      <item itemvalue="Python.realtime_inference" />
+    </list>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.realtime_inference" />
+        <item itemvalue="Python.visualize_PredCls_and_SGCls" />
+        <item itemvalue="Python.test" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="SvnConfiguration">
+    <configuration>C:\Users\cps\AppData\Roaming\Subversion</configuration>
+    <myIsUseDefaultProxy>true</myIsUseDefaultProxy>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="7b1edbd8-2891-439c-8585-926a99159d6b" name="Default Changelist" comment="" />
+      <created>1635295592061</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1635295592061</updated>
+      <workItem from="1635295601588" duration="8963000" />
+      <workItem from="1636364298521" duration="5975000" />
+      <workItem from="1636377387817" duration="9920000" />
+      <workItem from="1636390199330" duration="1897000" />
+      <workItem from="1636430417336" duration="2838000" />
+      <workItem from="1636435229601" duration="3148000" />
+      <workItem from="1637505418710" duration="88095000" />
+      <workItem from="1638014768304" duration="2403000" />
+      <workItem from="1638347931074" duration="131317000" />
+      <workItem from="1638842325462" duration="210370000" />
+      <workItem from="1639651376038" duration="19418000" />
+      <workItem from="1639673910149" duration="42296000" />
+      <workItem from="1639813698928" duration="5494000" />
+      <workItem from="1640440037900" duration="7965000" />
+      <workItem from="1640487793416" duration="143261000" />
+    </task>
+    <task id="LOCAL-00001" summary="no change">
+      <created>1636361683098</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1636361683098</updated>
+    </task>
+    <task id="LOCAL-00002" summary="no change">
+      <created>1636382383742</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1636382383742</updated>
+    </task>
+    <task id="LOCAL-00003" summary="shit">
+      <created>1636393061303</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1636393061303</updated>
+    </task>
+    <task id="LOCAL-00004" summary="Revert &quot;first commit&quot;&#10;&#10;This reverts commit 089a76cd">
+      <created>1636430053069</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1636430053069</updated>
+    </task>
+    <task id="LOCAL-00005" summary="no change">
+      <created>1636431430192</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1636431430192</updated>
+    </task>
+    <task id="LOCAL-00006" summary="commit on home">
+      <created>1636437557655</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1636437557655</updated>
+    </task>
+    <task id="LOCAL-00007" summary="New changelist">
+      <created>1636439927329</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1636439927329</updated>
+    </task>
+    <task id="LOCAL-00008" summary="commit on home">
+      <created>1636440025684</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1636440025684</updated>
+    </task>
+    <task id="LOCAL-00009" summary="commit on home">
+      <created>1636440753480</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1636440753480</updated>
+    </task>
+    <task id="LOCAL-00010" summary="commit on home">
+      <created>1636442336269</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1636442336269</updated>
+    </task>
+    <task id="LOCAL-00011" summary="commit on home">
+      <created>1636443679062</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1636443679062</updated>
+    </task>
+    <task id="LOCAL-00012" summary="commit on home">
+      <created>1636453252592</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1636453252592</updated>
+    </task>
+    <task id="LOCAL-00013" summary="add config">
+      <created>1636454134853</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1636454134853</updated>
+    </task>
+    <task id="LOCAL-00014" summary="add pure non visual 1st stage">
+      <created>1636977271777</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1636977271777</updated>
+    </task>
+    <task id="LOCAL-00015" summary="add 1 stage evluation">
+      <created>1637563117566</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1637563117566</updated>
+    </task>
+    <task id="LOCAL-00016" summary="add whole dataset cluster method">
+      <created>1638530741788</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1638530741788</updated>
+    </task>
+    <task id="LOCAL-00017" summary="add visualize code for cam stream and single dataset visualization">
+      <created>1638879442029</created>
+      <option name="number" value="00017" />
+      <option name="presentableId" value="LOCAL-00017" />
+      <option name="project" value="LOCAL" />
+      <updated>1638879442029</updated>
+    </task>
+    <task id="LOCAL-00018" summary="fix 2 stage evaluation bug, and add glove word embedding for 1 stage">
+      <created>1639212866431</created>
+      <option name="number" value="00018" />
+      <option name="presentableId" value="LOCAL-00018" />
+      <option name="project" value="LOCAL" />
+      <updated>1639212866431</updated>
+    </task>
+    <task id="LOCAL-00019" summary="fix 2 stage evaluation bug（can train without 1st stage）">
+      <created>1639317383431</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1639317383431</updated>
+    </task>
+    <task id="LOCAL-00020" summary="add 1stage distribution method">
+      <created>1639669505156</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1639669505156</updated>
+    </task>
+    <task id="LOCAL-00021" summary="add language to union feature, mean recall@100 achieve 37.68">
+      <created>1640575101278</created>
+      <option name="number" value="00021" />
+      <option name="presentableId" value="LOCAL-00021" />
+      <option name="project" value="LOCAL" />
+      <updated>1640575101279</updated>
+    </task>
+    <option name="localTasksCounter" value="22" />
+    <option name="trackContextForNewChangelist" value="true" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State>
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="non-visual-method" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+            </State>
+          </value>
+        </entry>
+      </map>
+    </option>
+    <option name="RECENT_FILTERS">
+      <map>
+        <entry key="Branch">
+          <value>
+            <list>
+              <RecentGroup>
+                <option name="FILTER_VALUES">
+                  <option value="HEAD" />
+                </option>
+              </RecentGroup>
+            </list>
+          </value>
+        </entry>
+      </map>
+    </option>
+    <option name="oldMeFiltersMigrated" value="true" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <option name="PERFORM_UPDATE_IN_BACKGROUND" value="false" />
+    <option name="PERFORM_COMMIT_IN_BACKGROUND" value="false" />
+    <option name="PERFORM_CHECKOUT_IN_BACKGROUND" value="false" />
+    <option name="PERFORM_ADD_REMOVE_IN_BACKGROUND" value="false" />
+    <option name="ADD_EXTERNAL_FILES_SILENTLY" value="true" />
+    <option name="SHOW_DIRTY_RECURSIVELY" value="true" />
+    <ignored-roots>
+      <path value="$PROJECT_DIR$" />
+    </ignored-roots>
+    <MESSAGE value="fuck" />
+    <MESSAGE value="f" />
+    <MESSAGE value="shit" />
+    <MESSAGE value="Revert &quot;first commit&quot;&#10;&#10;This reverts commit 089a76cd" />
+    <MESSAGE value="no change" />
+    <MESSAGE value="commit on home" />
+    <MESSAGE value="add config" />
+    <MESSAGE value="add pure non visual 1st stage" />
+    <MESSAGE value="add 1 stage evluation" />
+    <MESSAGE value="add whole dataset cluster method" />
+    <MESSAGE value="add visualize code for cam stream and single dataset visualization" />
+    <MESSAGE value="fix 2 stage evaluation bug, and add glove word embedding for 1 stage" />
+    <MESSAGE value="fix 2 stage evaluation bug（can train without 1st stage）" />
+    <MESSAGE value="add 1stage distribution method" />
+    <MESSAGE value="add language to union feature, mean recall@100 achieve 37.68" />
+    <option name="LAST_COMMIT_MESSAGE" value="add language to union feature, mean recall@100 achieve 37.68" />
+    <option name="MAKE_NEW_CHANGELIST_ACTIVE" value="true" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/clustering/stastic_analyze.py</url>
+          <line>100</line>
+          <option name="timeStamp" value="3" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/clustering/stastic_analyze.py</url>
+          <line>121</line>
+          <option name="timeStamp" value="4" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/datasets/vg/HDF5-to-JSON-converter.py</url>
+          <line>27</line>
+          <option name="timeStamp" value="6" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/datasets/vg/HDF5-to-JSON-converter.py</url>
+          <line>128</line>
+          <option name="timeStamp" value="7" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/clustering/stastic_analyze.py</url>
+          <line>979</line>
+          <option name="timeStamp" value="9" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/roi_relation_predictors.py</url>
+          <line>677</line>
+          <option name="timeStamp" value="77" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/rel_proposal_network/models.py</url>
+          <line>679</line>
+          <option name="timeStamp" value="79" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/utils_motifs.py</url>
+          <line>298</line>
+          <option name="timeStamp" value="337" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/box_head/sampling.py</url>
+          <line>130</line>
+          <option name="timeStamp" value="406" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/loss.py</url>
+          <line>266</line>
+          <option name="timeStamp" value="431" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/relation_head.py</url>
+          <line>299</line>
+          <option name="timeStamp" value="439" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/relation_head.py</url>
+          <line>222</line>
+          <option name="timeStamp" value="440" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/data/datasets/evaluation/vg/vg_eval.py</url>
+          <line>463</line>
+          <option name="timeStamp" value="450" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/data/datasets/evaluation/vg/vg_eval.py</url>
+          <line>533</line>
+          <option name="timeStamp" value="451" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/data/datasets/evaluation/vg/sgg_eval.py</url>
+          <line>477</line>
+          <option name="timeStamp" value="452" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/data/datasets/evaluation/vg/sgg_eval.py</url>
+          <line>86</line>
+          <option name="timeStamp" value="453" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/data/datasets/evaluation/vg/vg_eval.py</url>
+          <line>451</line>
+          <option name="timeStamp" value="458" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/inference.py</url>
+          <line>186</line>
+          <option name="timeStamp" value="460" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/relation_head/relation_head.py</url>
+          <line>176</line>
+          <option name="timeStamp" value="464" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/data/datasets/evaluation/vg/vg_eval.py</url>
+          <line>449</line>
+          <option name="timeStamp" value="466" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/data/datasets/evaluation/vg/sgg_eval.py</url>
+          <line>223</line>
+          <option name="timeStamp" value="468" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/clustering/clustering.py</url>
+          <line>237</line>
+          <option name="timeStamp" value="590" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/clustering/clustering.py</url>
+          <line>52</line>
+          <option name="timeStamp" value="612" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/tools/relation_test_net.py</url>
+          <line>114</line>
+          <option name="timeStamp" value="633" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/utils/model_zoo.py</url>
+          <line>47</line>
+          <option name="timeStamp" value="637" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/utils/model_zoo.py</url>
+          <line>43</line>
+          <option name="timeStamp" value="638" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/utils/model_zoo.py</url>
+          <line>42</line>
+          <option name="timeStamp" value="639" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/utils/model_zoo.py</url>
+          <line>36</line>
+          <option name="timeStamp" value="640" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/utils/model_zoo.py</url>
+          <line>19</line>
+          <option name="timeStamp" value="641" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/box_head/box_head.py</url>
+          <line>29</line>
+          <option name="timeStamp" value="660" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/data/build.py</url>
+          <line>339</line>
+          <option name="timeStamp" value="708" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/data/build.py</url>
+          <line>342</line>
+          <option name="timeStamp" value="713" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/data/build.py</url>
+          <line>344</line>
+          <option name="timeStamp" value="715" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/visualization/visualize_PredCls_and_SGCls.py</url>
+          <line>38</line>
+          <option name="timeStamp" value="788" />
+        </line-breakpoint>
+        <line-breakpoint suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/two_stage_heads/two_stage_heads.py</url>
+          <line>282</line>
+          <option name="timeStamp" value="838" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pysgg/modeling/roi_heads/two_stage_heads/two_stage_predictors.py</url>
+          <line>161</line>
+          <option name="timeStamp" value="869" />
+        </line-breakpoint>
+      </breakpoints>
+      <default-breakpoints>
+        <breakpoint type="python-exception">
+          <properties notifyOnTerminate="true" exception="BaseException">
+            <option name="notifyOnTerminate" value="true" />
+          </properties>
+        </breakpoint>
+      </default-breakpoints>
+    </breakpoint-manager>
+    <watches-manager>
+      <configuration name="PythonConfigurationType">
+        <watch expression="(subwordembedding[rel_pair_idx[:,0]].unsqueeze(-1) * objwordembedding[rel_pair_idx[:,1]].unsqueeze(-1).permute((0, 2, 1)))" language="Python" />
+        <watch expression="torch.all(torch.isfinite(relation_logits))" language="Python" />
+        <watch expression="relation_logits[1:100,1]" language="Python" />
+        <watch expression="relation_logits[1:100,2]" language="Python" />
+        <watch expression="relation_logits[1:100,3]" language="Python" />
+        <watch expression="torch.where((torch.isnan(relation_logits)))" language="Python" />
+        <watch expression="relation_logits[1360,:]" language="Python" />
+        <watch expression="(torch.isfinite(relation_logits))" language="Python" />
+        <watch expression="relation_logits[notnan]" language="Python" />
+        <watch expression="relation_logits" language="Python" />
+        <watch expression="torch.unique(notnan[0])" language="Python" />
+        <watch expression="notnan[0]" language="Python" />
+      </configuration>
+    </watches-manager>
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/PySGG_cxg$torch_distributed_launch23_2st_dist_cos_unionfution_matrix_mul.coverage" NAME="torch.distributed.launch23_2st_dist_cos_unionfution_matrix_mul Coverage Results" MODIFIED="1640837069433" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$torch_distributed_launch.coverage" NAME="torch.distributed.launch Coverage Results" MODIFIED="1638355823257" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$torch_distributed_launch23_2st_dist_kl.coverage" NAME="torch.distributed.launch23_2st_dist_kl Coverage Results" MODIFIED="1639673366874" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$torch_distributed_launch23_2st_dist_cos_trans.coverage" NAME="torch.distributed.launch23_2st_dist_cos_trans Coverage Results" MODIFIED="1641041397126" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$torch_distributed_launch23_2st_dist_cos_unionfution_matrix_3conv.coverage" NAME="torch.distributed.launch23_2st_dist_cos_unionfution_matrix_3conv Coverage Results" MODIFIED="1640599508102" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$torch_distributed_launch23_2st_dist.coverage" NAME="torch.distributed.launch23_2st_dist Coverage Results" MODIFIED="1639620640518" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$two_stage_predictors.coverage" NAME="two_stage_predictors Coverage Results" MODIFIED="1634536812226" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/pysgg/modeling/roi_heads/two_stage_heads" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$relation_test_net.coverage" NAME="test Coverage Results" MODIFIED="1638694662502" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$torch_distributed_launch0_1.coverage" NAME="torch.distributed.launch0_1 Coverage Results" MODIFIED="1637578136698" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$fuck.coverage" NAME="fuck Coverage Results" MODIFIED="1634218056284" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/pysgg/data" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$stastic_analyze.coverage" NAME="stastic_analyze Coverage Results" MODIFIED="1633324653625" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$torch_distributed_launch01.coverage" NAME="torch.distributed.launch01 Coverage Results" MODIFIED="1637652572733" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$visualize_PredCls_and_SGCls.coverage" NAME="visualize_PredCls_and_SGCls Coverage Results" MODIFIED="1639157242002" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$realtime_inference.coverage" NAME="realtime_inference Coverage Results" MODIFIED="1639813944961" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$torch_distributed_launch23.coverage" NAME="torch.distributed.launch23 Coverage Results" MODIFIED="1639409320471" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$HDF5_to_JSON_converter.coverage" NAME="HDF5-to-JSON-converter Coverage Results" MODIFIED="1633186299271" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/datasets/vg" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$fuck__1_.coverage" NAME="fuck (1) Coverage Results" MODIFIED="1634232866514" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/checkpoints/predcls-BGNNPredictor" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$torch_distributed_launch23_2st_dist_cos.coverage" NAME="torch.distributed.launch23_2st_dist_cos Coverage Results" MODIFIED="1639756044098" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PySGG_cxg$relation_train_net.coverage" NAME="torch.distributed.launch Coverage Results" MODIFIED="1635256726436" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+  </component>
+</project>

@@ -454,7 +454,7 @@ def make_batch_data_sampler(
             sampler, group_ids, images_per_batch, drop_uneven=False
         )
     else:
-        batch_sampler = torch.utils.data.sampler.BatchSampler(
+        batch_sampler = torch.utils.data.sampler.BatchSampler(#sampler已经是在子数据集范围内的sampler了
             sampler, images_per_batch, drop_last=False
         )
     if num_iters is not None:
@@ -539,7 +539,7 @@ def make_data_loader(cfg, mode='train', is_distributed=False, start_iter=0,for_c
         # print(len(dataset))
         # print(images_per_gpu)
         # print('============')
-        sampler = make_data_sampler(dataset, shuffle, is_distributed)#torch自带sampler
+        sampler = make_data_sampler(dataset, shuffle, is_distributed)#DistributedSampler
         batch_sampler = make_batch_data_sampler(
             dataset, sampler, aspect_grouping, images_per_gpu, num_iters, start_iter
         )

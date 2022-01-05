@@ -39,7 +39,7 @@ class RelationFeatureExtractor(nn.Module):
             self.out_channels = self.feature_extractor.out_channels * 2
         else:
             self.feature_extractor = make_roi_box_feature_extractor(cfg, in_channels, cat_all_levels=pool_all_levels,
-                                                                    for_relation=True)#in_channels:256
+                                                                    for_relation=False)#in_channels:256,for_relation=False代表union feature提取不考虑全局
             self.out_channels = self.feature_extractor.out_channels#4096
 
         self.geometry_feature = cfg.MODEL.ROI_RELATION_HEAD.GEOMETRIC_FEATURES#true
@@ -68,8 +68,8 @@ class RelationFeatureExtractor(nn.Module):
                                                   make_fc(
                                                       out_dim // 2, out_dim), nn.ReLU(inplace=True),
                                                   ])
-        self.visual_language_merger = make_visual_language_merger(
-            cfg) if cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER else None  # language和visual融合
+        self.visual_language_merger_edge = make_visual_language_merger_edge(
+            cfg) if cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_EDGE else None  # language和visual融合
     def forward(self, x, proposals, rel_pair_idxs=None):
         device = x[0].device
         union_proposals = []
@@ -119,8 +119,8 @@ class RelationFeatureExtractor(nn.Module):
         # union visual feature. size (total_num_rel, in_channels, POOLER_RESOLUTION, POOLER_RESOLUTION)
         union_vis_features = self.feature_extractor.pooler(x, union_proposals)#对每一layer的特征算pool,在将通道拼接、缩减
         #这里加入pair的language feature
-        if self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER:
-            union_vis_features=self.visual_language_merger(union_vis_features, proposals, rel_pair_idxs)
+        if self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_EDGE:
+            union_vis_features=self.visual_language_merger_edge(union_vis_features, proposals, rel_pair_idxs)
         # merge two parts
         if self.geometry_feature:
             # rectangle feature. size (total_num_rel, in_channels, POOLER_RESOLUTION, POOLER_RESOLUTION)
@@ -152,9 +152,9 @@ def make_roi_relation_feature_extractor(cfg, in_channels):
         cfg.MODEL.ROI_RELATION_HEAD.FEATURE_EXTRACTOR
     ]
     return func(cfg, in_channels)#RelationFeatureExtractor
-class make_visual_language_merger(nn.Module):
+class make_visual_language_merger_edge(nn.Module):
     def __init__(self,cfg):
-        super(make_visual_language_merger, self).__init__()
+        super(make_visual_language_merger_edge, self).__init__()
         self.cfg=cfg
         # self.mlp1=nn.Sequential(
         #     make_fc(51, 51),
@@ -188,7 +188,7 @@ class make_visual_language_merger(nn.Module):
             self.sublanguageembedding.weight.copy_(obj_embed_vecs, non_blocking=True)
             self.objlanguageembedding.weight.copy_(obj_embed_vecs, non_blocking=True)
         # self.ops =  nn.Sequential(*[
-        #     torch.nn.AvgPool2d(5,padding=2),
+        #     torch.nn.AvgPool2d(8,padding=2),
         #     torch.nn.Conv2d(1, 51, 3, 1, bias=False),
         #     BatchNorm2d(51),
         #     nn.ReLU(inplace=True),
@@ -197,7 +197,7 @@ class make_visual_language_merger(nn.Module):
         #     nn.ReLU(inplace=True),
         #     torch.nn.Conv2d(128, 256, 1, 1, bias=False),
         #     BatchNorm2d(256),
-        #     torch.nn.AvgPool2d(5),
+        #     torch.nn.AvgPool2d(3),
         # ])
         self.ops = nn.Sequential(*[
             torch.nn.AvgPool2d(29, padding=2),
@@ -229,15 +229,20 @@ class make_visual_language_merger(nn.Module):
                 objwordembedding_corpus = self.objlanguageembedding(
                     obj_labels.long())
             else:
-                obj_logits = torch.cat([proposal.get_field("predict_logits") for proposal in proposals], dim=0).detach()
-                subwordembedding_corpus = obj_logits @ self.sublanguageembedding.weight  # ?
-                objwordembedding_corpus = obj_logits @ self.objlanguageembedding.weight
+                # obj_logits = torch.cat([proposal.get_field("predict_logits") for proposal in proposals], dim=0).detach()
+                # subwordembedding_corpus = obj_logits @ self.sublanguageembedding.weight  # ?
+                # objwordembedding_corpus = obj_logits @ self.objlanguageembedding.weight
+                obj_labels = torch.cat([proposal.get_field('pred_labels') for proposal in proposals], dim=0).detach()
+                subwordembedding_corpus = self.sublanguageembedding(
+                    obj_labels.long())  # word embedding层，输入word标签得embedding
+                objwordembedding_corpus = self.objlanguageembedding(
+                    obj_labels.long())
 
             num = [len(proposal) for proposal in proposals]
-            # subwordembedding_corpus = subwordembedding_corpus.to('cpu').split(num, dim=0)
-            # objwordembedding_corpus = objwordembedding_corpus.to('cpu').split(num, dim=0)
             subwordembedding_corpus = subwordembedding_corpus.split(num, dim=0)
             objwordembedding_corpus = objwordembedding_corpus.split(num, dim=0)
+            # subwordembedding_corpus = subwordembedding_corpus.split(num, dim=0)
+            # objwordembedding_corpus = objwordembedding_corpus.split(num, dim=0)
             languageembedding=[]
 
             # for subwordembedding,objwordembedding,rel_pair_idx in zip(subwordembedding_corpus,objwordembedding_corpus,rel_pair_idxs):
