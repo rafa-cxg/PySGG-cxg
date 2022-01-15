@@ -322,7 +322,8 @@ def do_vg_evaluation(
                 save_file = os.path.join(cfg.OUTPUT_DIR,
                                          f"rel_freq_dist2recall-{mean_recall_evaluator.type}-{eval_times}.png")
                 fig.savefig(save_file, dpi=300)
-
+                plt.cla()
+                plt.close(fig)
         per_cls_res_dict = eval_mean_recall.result_dict[f'{mode}_{eval_mean_recall.type}_list'][100]
         show_per_cls_performance_and_frequency(eval_mean_recall, per_cls_res_dict)
 

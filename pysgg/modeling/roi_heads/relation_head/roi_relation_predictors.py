@@ -978,7 +978,6 @@ class MotifPredictor(nn.Module):
         self.num_obj_cls = config.MODEL.ROI_BOX_HEAD.NUM_CLASSES
         self.num_att_cls = config.MODEL.ROI_ATTRIBUTE_HEAD.NUM_ATTRIBUTES
         self.num_rel_cls = config.MODEL.ROI_RELATION_HEAD.NUM_CLASSES
-
         assert in_channels is not None
         num_inputs = in_channels
         self.use_vision = config.MODEL.ROI_RELATION_HEAD.PREDICT_USE_VISION
@@ -1067,14 +1066,14 @@ class MotifPredictor(nn.Module):
                 roi_features, proposals, logger
             )
         else:
-            obj_dists, obj_preds, edge_ctx, _ = self.context_layer(
+            obj_dists, obj_preds, edge_ctx, _ = self.context_layer(#edge rep就是包含两两之间的rep,我应该在这里加
                 roi_features, proposals, logger
             )
 
         # post decode
-        edge_rep = self.post_emb(edge_ctx)
+        edge_rep = self.post_emb(edge_ctx)#[num_obj,512]->[num_obj,1024]
         edge_rep = edge_rep.view(edge_rep.size(0), 2, self.hidden_dim)
-        head_rep = edge_rep[:, 0].contiguous().view(-1, self.hidden_dim)
+        head_rep = edge_rep[:, 0].contiguous().view(-1, self.hidden_dim)#torch.Size([num_obj, 512])
         tail_rep = edge_rep[:, 1].contiguous().view(-1, self.hidden_dim)
 
         num_rels = [r.shape[0] for r in rel_pair_idxs]
@@ -1089,15 +1088,19 @@ class MotifPredictor(nn.Module):
 
         prod_reps = []
         pair_preds = []
+
+
         for pair_idx, head_rep, tail_rep, obj_pred in zip(
             rel_pair_idxs, head_reps, tail_reps, obj_preds
         ):
             prod_reps.append(
-                torch.cat((head_rep[pair_idx[:, 0]], tail_rep[pair_idx[:, 1]]), dim=-1)
+                torch.cat((head_rep[pair_idx[:, 0]], tail_rep[pair_idx[:, 1]]), dim=-1)#[num_rel,1024]
             )
             pair_preds.append(
                 torch.stack((obj_pred[pair_idx[:, 0]], obj_pred[pair_idx[:, 1]]), dim=1)
             )
+        # if self.visual_language_merger_edge != None:
+        #     prod_reps=self.visual_language_merger_edge(prod_reps,proposals,rel_pair_idxs)
         prod_rep = cat(prod_reps, dim=0)
         pair_pred = cat(pair_preds, dim=0)
 

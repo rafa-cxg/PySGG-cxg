@@ -187,6 +187,7 @@ class DecoderRNN(nn.Module):
                 nonzero_pred = pred_dist[:, 1:].max(1)[1] + 1
                 is_bg = (labels_to_embed == 0).nonzero()
                 if is_bg.dim() > 0:
+                    labels_to_embed=labels_to_embed.long()
                     labels_to_embed[is_bg.squeeze(1)] = nonzero_pred[is_bg.squeeze(1)]
                 refined_obj_labels.append(labels_to_embed)
                 previous_obj_embed = self.obj_embed(labels_to_embed + 1)
@@ -265,20 +266,26 @@ class LSTMContext(nn.Module):
         self.nl_edge = self.cfg.MODEL.ROI_RELATION_HEAD.CONTEXT_REL_LAYER
         assert self.nl_obj > 0 and self.nl_edge > 0
 
+
+        if self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ:
+            self.language_edge_dim=512
+        else: self.language_edge_dim=0
+
+
         # TODO Kaihua Tang
         # AlternatingHighwayLSTM is invalid for pytorch 1.0
         self.obj_ctx_rnn = torch.nn.LSTM(
-            input_size=self.obj_dim + self.embed_dim + 128,
+            input_size=self.obj_dim + self.embed_dim + 128+self.language_edge_dim,
             hidden_size=self.hidden_dim,
             num_layers=self.nl_obj,
             dropout=self.dropout_rate if self.nl_obj > 1 else 0,
             bidirectional=True)
         self.decoder_rnn = DecoderRNN(self.cfg, self.obj_classes, embed_dim=self.embed_dim,
-                                      inputs_dim=self.hidden_dim + self.obj_dim + self.embed_dim + 128,
+                                      inputs_dim=self.hidden_dim + self.obj_dim + self.embed_dim + 128+self.language_edge_dim,
                                       hidden_dim=self.hidden_dim,
                                       rnn_drop=self.dropout_rate)
         self.edge_ctx_rnn = torch.nn.LSTM(
-            input_size=self.embed_dim + self.hidden_dim + self.obj_dim,
+            input_size=self.embed_dim + self.hidden_dim + self.obj_dim+self.language_edge_dim,
             hidden_size=self.hidden_dim,
             num_layers=self.nl_edge,
             dropout=self.dropout_rate if self.nl_edge > 1 else 0,
@@ -293,9 +300,9 @@ class LSTMContext(nn.Module):
 
         if self.effect_analysis:
             self.register_buffer("untreated_dcd_feat",
-                                 torch.zeros(self.hidden_dim + self.obj_dim + self.embed_dim + 128))
-            self.register_buffer("untreated_obj_feat", torch.zeros(self.obj_dim + self.embed_dim + 128))
-            self.register_buffer("untreated_edg_feat", torch.zeros(self.embed_dim + self.obj_dim))
+                                 torch.zeros(self.hidden_dim + self.obj_dim + self.embed_dim + 128+self.language_edge_dim))
+            self.register_buffer("untreated_obj_feat", torch.zeros(self.obj_dim + self.embed_dim + 128+self.language_edge_dim))
+            self.register_buffer("untreated_edg_feat", torch.zeros(self.embed_dim + self.obj_dim+self.language_edge_dim))
 
     def sort_rois(self, proposals):
         c_x = center_x(proposals)
@@ -358,7 +365,7 @@ class LSTMContext(nn.Module):
         :return: edge_ctx: [num_obj, #feats] For later!
         """
         edge_input_packed = PackedSequence(inp_feats[perm], ls_transposed)
-        edge_reps = self.edge_ctx_rnn(edge_input_packed)[0][0]
+        edge_reps = self.edge_ctx_rnn(edge_input_packed)[0][0]#[num_obj,4096+512]->[num_obj,4096+1024]
         edge_reps = self.lin_edge_h(edge_reps)  # map to hidden_dim
 
         edge_ctx = edge_reps[inv_perm]
@@ -406,7 +413,7 @@ class LSTMContext(nn.Module):
         obj_embed2 = self.obj_embed2(obj_preds.long())
 
         if (all_average or ctx_average) and self.effect_analysis and (not self.training):
-            obj_rel_rep = cat((self.untreated_edg_feat.view(1, -1).expand(batch_size, -1), obj_ctx), dim=-1)
+            obj_rel_rep = cat((self.untreated_edg_feat.view(1, -1).expand(batch_size, -1), obj_ctx), dim=-1)#untreated_edg_feat前面进行了初始化为0
         else:
             obj_rel_rep = cat((obj_embed2, x, obj_ctx), -1)
 

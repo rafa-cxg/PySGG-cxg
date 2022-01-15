@@ -1,41 +1,3 @@
-AMP_VERBOSE: false
-DATALOADER:
-  ASPECT_RATIO_GROUPING: true
-  NUM_WORKERS: 4
-  SIZE_DIVISIBILITY: 32
-DATASETS:
-  LOAD_PRECOMPUTE_DETECTION_BOX: false
-  TEST:
-  - VG_stanford_filtered_with_attribute_test
-  TRAIN:
-  - VG_stanford_filtered_with_attribute_train
-  VAL:
-  - VG_stanford_filtered_with_attribute_val
-DEBUG: false
-DTYPE: float32
-EXPERIMENT_NAME: BGNN-3-3-learnable_scaling
-GLOBAL_BUFFER_ON: false
-GLOVE_DIR: datasets/vg/stanford_spilt/glove
-INPUT:
-  BRIGHTNESS: 0.0
-  CONTRAST: 0.0
-  HUE: 0.0
-  MAX_SIZE_TEST: 1000
-  MAX_SIZE_TRAIN: 1000
-  MIN_SIZE_TEST: 600
-  MIN_SIZE_TRAIN:
-  - 600
-  PIXEL_MEAN:
-  - 102.9801
-  - 115.9465
-  - 122.7717
-  PIXEL_STD:
-  - 1.0
-  - 1.0
-  - 1.0
-  SATURATION: 0.0
-  TO_BGR255: true
-  VERTICAL_FLIP_PROB_TRAIN: 0.0
 MODEL:
   TWO_STAGE_ON: true
   TWO_STAGE_HEAD:
@@ -53,7 +15,7 @@ MODEL:
     LOSS_TYPE: 'cos_loss' # 仅在loss_dist为true时成立
   ATTRIBUTE_ON: false
   BACKBONE:
-    CONV_BODY: R-101-FPN
+    CONV_BODY: "VGG-16"
     FREEZE_CONV_BODY_AT: 2
   CLS_AGNOSTIC_BBOX_REG: false
   DEVICE: cuda
@@ -88,7 +50,7 @@ MODEL:
   MASK_ON: false
   META_ARCHITECTURE: GeneralizedRCNN
   PRETRAINED_DETECTOR_CKPT: checkpoints/predcls-BGNNPredictor/(2021-07-16_08)BGNN-3-3-learnable_scaling(resampling)/predcls-BGNNPredictor/only_1stage/model_0008400.pth
-#  PRETRAINED_DETECTOR_CKPT: checkpoints/predcls-BGNNPredictor/2st_dist_cos/model_0018000.pth /0  checkpoints/predcls-BGNNPredictor/2st_dist_cos_unionobjfution_matrix/model_0000800.pth
+#  PRETRAINED_DETECTOR_CKPT: checkpoints/predcls-BGNNPredictor/2st_dist_cos/model_0018000.pth /checkpoints/detection/pretrained_faster_rcnn/vg_faster_det.pth  checkpoints/predcls-BGNNPredictor/2st_dist_cos_unionobjfution_matrix/model_0000800.pth
   RELATION_ON: true
   RESNETS:
     BACKBONE_OUT_CHANNELS: 256
@@ -114,12 +76,7 @@ MODEL:
     - 128
     - 256
     - 512
-    ANCHOR_STRIDES:
-    - 8
-    - 16
-    - 32
-    - 64
-    - 128
+    ANCHOR_STRIDES: (8, 16, 32, 64, 128)
     ASPECT_RATIOS:
     - 0.5
     - 1.0
@@ -161,11 +118,7 @@ MODEL:
     NUM_STACKED_CONVS: 4
     POOLER_RESOLUTION: 7
     POOLER_SAMPLING_RATIO: 2
-    POOLER_SCALES:
-    - 0.25
-    - 0.125
-    - 0.0625
-    - 0.03125
+    POOLER_SCALES: (0.0625,)
     PREDICTOR: FPNPredictor
     USE_GN: false
   ROI_HEADS:
@@ -183,7 +136,7 @@ MODEL:
     POSITIVE_FRACTION: 0.5
     POST_NMS_PER_CLS_TOPN: 300
     SCORE_THRESH: 0.01
-    USE_FPN: true
+    USE_FPN: false
   ROI_KEYPOINT_HEAD:
     CONV_LAYERS:
     - 512
@@ -469,11 +422,8 @@ MODEL:
     - 256
     - 512
     ANCHOR_STRIDE:
-    - 4
-    - 8
     - 16
-    - 32
-    - 64
+
     ASPECT_RATIOS:
     - 0.23232838
     - 0.63365731
@@ -495,7 +445,7 @@ MODEL:
     RPN_HEAD: SingleConvRPNHead
     RPN_MID_CHANNEL: 256
     STRADDLE_THRESH: 0
-    USE_FPN: true
+    USE_FPN: false
   RPN_ONLY: false
   VGG:
     VGG16_OUT_CHANNELS: 512
@@ -503,6 +453,38 @@ MODEL:
 OUTPUT_DIR: checkpoints
 PATHS_CATALOG: pysgg/config/paths_catalog.py
 PATHS_DATA: pysgg/config/../data/datasets
+INPUT:
+  BRIGHTNESS: 0.0
+  CONTRAST: 0.0
+  HUE: 0.0
+  MAX_SIZE_TEST: 1000
+  MAX_SIZE_TRAIN: 1000
+  MIN_SIZE_TEST: 600
+  MIN_SIZE_TRAIN:
+  - 600
+  PIXEL_MEAN:
+  - 102.9801
+  - 115.9465
+  - 122.7717
+  PIXEL_STD:
+  - 1.0
+  - 1.0
+  - 1.0
+  SATURATION: 0.0
+  TO_BGR255: true
+  VERTICAL_FLIP_PROB_TRAIN: 0.0
+DATASETS:
+  LOAD_PRECOMPUTE_DETECTION_BOX: false
+  TEST:
+  - VG_stanford_filtered_with_attribute_test
+  TRAIN:
+  - VG_stanford_filtered_with_attribute_train
+  VAL:
+  - VG_stanford_filtered_with_attribute_val
+DATALOADER:
+  ASPECT_RATIO_GROUPING: true
+  NUM_WORKERS: 4
+  SIZE_DIVISIBILITY: 32
 SOLVER:
   BASE_LR: 0.008
   BIAS_LR_FACTOR: 1
@@ -517,8 +499,8 @@ SOLVER:
   PRINT_GRAD_FREQ: 4000
   SCHEDULE:
     COOLDOWN: 0
-    FACTOR: 0.9
-    MAX_DECAY_STEP: 400
+    FACTOR: 0.8
+    MAX_DECAY_STEP: 40
     PATIENCE: 6
     THRESHOLD: 0.001
     TYPE: WarmupReduceLROnPlateau
@@ -551,3 +533,10 @@ TEST:
     REQUIRE_OVERLAP: false
     SYNC_GATHER: true
   SAVE_PROPOSALS: false
+
+DEBUG: false
+DTYPE: float32
+EXPERIMENT_NAME: human_bias_vgg16
+GLOBAL_BUFFER_ON: false
+GLOVE_DIR: datasets/vg/stanford_spilt/glove
+

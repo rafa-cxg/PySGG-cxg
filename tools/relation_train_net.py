@@ -296,7 +296,7 @@ def train(
     arguments = {}
     if cfg.MODEL.PRETRAINED_DETECTOR_CKPT != "":#todo 加入对先前训练最佳值的记录
         checkpoint=checkpointer.load(
-            cfg.MODEL.PRETRAINED_DETECTOR_CKPT, with_optim=True,update_schedule=True , load_mapping=load_mapping
+            cfg.MODEL.PRETRAINED_DETECTOR_CKPT, with_optim=False,update_schedule=True , load_mapping=load_mapping
         )
         if cfg.MODEL.PRETRAINED_DETECTOR_CKPT=='checkpoints/detection/pretrained_faster_rcnn/vg_faster_det.pth':#如果从detection模型开始训练，起始Iter应设置0
             arguments["iteration"]=0
@@ -387,12 +387,13 @@ def train(
     if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_BOX:
         if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL:
             mode = "predcls"
-            recall_highest_setting = 0.36  # 暂时
+            recall_highest_setting = 0.35  # 暂时
         else:
             mode = "sgcls"
+            recall_highest_setting = 0.07#0.15
     else:
         mode = "sgdet"
-        recall_highest_setting = 0.1715  # 暂时
+        recall_highest_setting = 0.06#0.1715  # 暂时
 
     if cfg.USE_CLUSTER==True:
         if os.path.isfile(cfg.OUTPUT_DIR+'/cluster_on_dataset.pkl')==False:#存放数据集Instance的feature文件

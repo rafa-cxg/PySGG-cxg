@@ -199,15 +199,29 @@ class make_visual_language_merger_edge(nn.Module):
         #     BatchNorm2d(256),
         #     torch.nn.AvgPool2d(3),
         # ])
-        self.ops = nn.Sequential(*[
+        #used for 7*7
+        # self.ops = nn.Sequential(
+        #     torch.nn.AvgPool2d(29, padding=2),
+        #     torch.nn.Conv2d(1, 256, 3, 1, 1, bias=False),
+        #     BatchNorm2d(256),
+        #     nn.ReLU(inplace=True),
+        #     # torch.nn.AvgPool2d(290, padding=2),
+        #     torch.nn.Conv2d(256, 256, 3, 1, 1, bias=False),
+        #     BatchNorm2d(256),
+        #     nn.ReLU(inplace=True)
+        # )
+        self.ops = nn.Sequential(
             torch.nn.AvgPool2d(29, padding=2),
-            torch.nn.Conv2d(1, 256, 3, 1, bias=False),
+            torch.nn.Conv2d(1, 128, 3, 1, 1, bias=False),
+            BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            # torch.nn.AvgPool2d(290, padding=2),
+            torch.nn.Conv2d(128, 256, 3, 1, 1, bias=False),
             BatchNorm2d(256),
             nn.ReLU(inplace=True),
-            torch.nn.Conv2d(256, 256, 3, 3, bias=False),
-            BatchNorm2d(256),
-            nn.ReLU(inplace=True)
-        ])
+            torch.nn.AvgPool2d(7)
+        )
+        # self.motif_transform=make_fc(7*7*256,1024)
         # self.c1=Conv2d(1, 256, 3, 1, 1, bias=False)
         # self.bn=BatchNorm2d(256)
         # self.relu=nn.ReLU(inplace=True)
@@ -258,9 +272,12 @@ class make_visual_language_merger_edge(nn.Module):
 
                 language_matrixs=(subwordembedding[rel_pair_idx[:,0]].unsqueeze(-1) * objwordembedding[rel_pair_idx[:,1]].unsqueeze(-1).permute((0, 2, 1))).unsqueeze(1)
                 op=self.ops(language_matrixs)
+                # if self.cfg.MODEL.ROI_RELATION_HEAD.PREDICTOR=='MotifPredictor':
+                #     op=self.motif_transform(op.view(rel_pair_idx.size(0),-1))
+
                 languageembedding.append(op)
                 del language_matrixs; del op
             languageembedding=torch.cat(languageembedding,0)#[N_PAIRS,1,200,200]
-            mixed=visual_feature+languageembedding
+            mixed=visual_feature*languageembedding
             return mixed
 
