@@ -84,7 +84,10 @@ class RelationFeatureExtractor(nn.Module):
             # except AssertionError:
             #     print(torch.max(rel_pair_idx[:, 0]).item())
             head_proposal = proposal[rel_pair_idx[:, 0]]
-            assert torch.max(rel_pair_idx[:, 1]).item()<80
+            try:
+                assert torch.max(rel_pair_idx[:, 1]).item()<80
+            except :
+                print(torch.max(rel_pair_idx[:, 0]).item())
             tail_proposal = proposal[rel_pair_idx[:, 1]]
 
             union_proposal = boxlist_union(head_proposal, tail_proposal)
@@ -210,17 +213,29 @@ class make_visual_language_merger_edge(nn.Module):
         #     BatchNorm2d(256),
         #     nn.ReLU(inplace=True)
         # )
-        self.ops = nn.Sequential(
+        dim=cfg.MODEL.RESNETS.BACKBONE_OUT_CHANNELS
+        #1*1
+        # self.ops = nn.Sequential(
+        #     torch.nn.AvgPool2d(29, padding=2),
+        #     torch.nn.Conv2d(1, (dim//2), 3, 1, 1, bias=False),
+        #     BatchNorm2d(dim//2),
+        #     nn.ReLU(inplace=True),
+        #     # torch.nn.AvgPool2d(290, padding=2),
+        #     torch.nn.Conv2d(dim//2, dim, 3, 1, 1, bias=False),
+        #     BatchNorm2d(dim),
+        #     nn.ReLU(inplace=True),
+        #     torch.nn.AvgPool2d(7)
+        # )
+        self.ops = nn.Sequential(*[
             torch.nn.AvgPool2d(29, padding=2),
-            torch.nn.Conv2d(1, 128, 3, 1, 1, bias=False),
-            BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            # torch.nn.AvgPool2d(290, padding=2),
-            torch.nn.Conv2d(128, 256, 3, 1, 1, bias=False),
+            torch.nn.Conv2d(1, 256, 3, 1, bias=False),
             BatchNorm2d(256),
             nn.ReLU(inplace=True),
-            torch.nn.AvgPool2d(7)
-        )
+            torch.nn.Conv2d(256, 256, 3, 3, bias=False),
+            BatchNorm2d(256),
+            nn.ReLU(inplace=True)
+        ])
+
         # self.motif_transform=make_fc(7*7*256,1024)
         # self.c1=Conv2d(1, 256, 3, 1, 1, bias=False)
         # self.bn=BatchNorm2d(256)
@@ -243,14 +258,17 @@ class make_visual_language_merger_edge(nn.Module):
                 objwordembedding_corpus = self.objlanguageembedding(
                     obj_labels.long())
             else:
-                # obj_logits = torch.cat([proposal.get_field("predict_logits") for proposal in proposals], dim=0).detach()
-                # subwordembedding_corpus = obj_logits @ self.sublanguageembedding.weight  # ?
-                # objwordembedding_corpus = obj_logits @ self.objlanguageembedding.weight
-                obj_labels = torch.cat([proposal.get_field('pred_labels') for proposal in proposals], dim=0).detach()
-                subwordembedding_corpus = self.sublanguageembedding(
-                    obj_labels.long())  # word embedding层，输入word标签得embedding
-                objwordembedding_corpus = self.objlanguageembedding(
-                    obj_labels.long())
+                if self.cfg.MODEL.ROI_RELATION_HEAD.use_possibility_merger:
+
+                    obj_logits = torch.cat([proposal.get_field("predict_logits") for proposal in proposals], dim=0).detach()
+                    subwordembedding_corpus = obj_logits @ self.sublanguageembedding.weight  # ?
+                    objwordembedding_corpus = obj_logits @ self.objlanguageembedding.weight
+                else:
+                    obj_labels = torch.cat([proposal.get_field('pred_labels') for proposal in proposals], dim=0).detach()
+                    subwordembedding_corpus = self.sublanguageembedding(
+                        obj_labels.long())  # word embedding层，输入word标签得embedding
+                    objwordembedding_corpus = self.objlanguageembedding(
+                        obj_labels.long())
 
             num = [len(proposal) for proposal in proposals]
             subwordembedding_corpus = subwordembedding_corpus.split(num, dim=0)

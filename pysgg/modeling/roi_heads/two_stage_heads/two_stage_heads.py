@@ -72,20 +72,21 @@ class Two_Stage_Head(torch.nn.Module):
             self.obj_embed_on_prob_dist.weight.copy_(obj_embed_vecs, non_blocking=True)
             self.obj_embed_on_pred_label.weight.copy_(obj_embed_vecs, non_blocking=True)
         # self.num_rel_group =3
-        self.predicatename2cluster={}
-        self.predicateid2cluster = {}
-        with open(os.path.join(self.data_dir, 'predicate2cluster.json'), 'r') as json_file:
-            predicatename2cluster = json.load(json_file)
-            for key, value in predicatename2cluster.items():
-                for v in value:
-                    self.predicatename2cluster[v] = key
-        with open(os.path.join(self.cluster_dir, 'predicate2cluster.json'), 'r') as json_file:
-            predicateid2cluster = json.load(json_file)
-            for key, value in predicateid2cluster.items():
-                for v in value:
-                    self.predicateid2cluster[int(v)] = int(key)+1#留出backgroud位置
-        '''外加ground'''
-        self.predicateid2cluster[0]=0
+        if cfg.USE_CLUSTER:
+            self.predicatename2cluster={}
+            self.predicateid2cluster = {}
+            with open(os.path.join(self.data_dir, 'predicate2cluster.json'), 'r') as json_file:
+                predicatename2cluster = json.load(json_file)
+                for key, value in predicatename2cluster.items():
+                    for v in value:
+                        self.predicatename2cluster[v] = key
+            with open(os.path.join(self.cluster_dir, 'predicate2cluster.json'), 'r') as json_file:
+                predicateid2cluster = json.load(json_file)
+                for key, value in predicateid2cluster.items():
+                    for v in value:
+                        self.predicateid2cluster[int(v)] = int(key)+1#留出backgroud位置
+            '''外加ground'''
+            self.predicateid2cluster[0]=0
 
         self.loss_distribution=True if (cfg.MODEL.TWO_STAGE_HEAD.loss_distribution and  cfg.MODEL.TWO_STAGE_ON) else False
         # mode

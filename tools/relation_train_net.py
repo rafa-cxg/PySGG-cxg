@@ -414,7 +414,7 @@ def train(
             clustering_loss = deepcluster.sklearn_cluster(feature.to('cpu').numpy())
 
     for iteration, (images, targets, _) in (enumerate(train_data_loader, start_iter)):
-        torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
         if any(len(target) < 1 for target in targets):
             logger.error(
                 f"Iteration={iteration + 1} || Image Ids used for training {_} || targets Length={[len(target) for target in targets]}"
@@ -433,12 +433,11 @@ def train(
 
 
         losses = sum(loss for loss in loss_dict.values())
-        # synchronize()
-        bad_flag=0
-        if losses==0 or ('loss_two_stage' not in loss_dict.keys()):
-            print('counter nan: pass this iter\n')
-            print('print loss_dict: .{}'.format(loss_dict))
-            bad_flag=1
+        if cfg.MODEL.TWO_STAGE_ON: #只有使用2stage时候才考虑loss为0的问题
+            if losses==0 or ('loss_two_stage' not in loss_dict.keys()):
+                print('counter nan: pass this iter\n')
+                print('print loss_dict: .{}'.format(loss_dict))
+
             # num_gpus=get_world_size()
             # get_rank() == 0
             # optimizer.zero_grad()
@@ -634,7 +633,7 @@ def run_val(cfg, model, val_data_loaders, distributed, logger):
     dataset_names = cfg.DATASETS.VAL#'VG_stanford_filtered_with_attribute_val'
     val_result = []
     for dataset_name, val_data_loader in zip(dataset_names, val_data_loaders):
-        torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
         dataset_result = inference(
             cfg,
             model,

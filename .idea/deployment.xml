@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="titan x" remoteFilesAllowedToDisappearOnAutoupload="false">
+  <component name="PublishConfigData" autoUpload="Always" serverName="root@10.193.5.194:10001" remoteFilesAllowedToDisappearOnAutoupload="false">
     <serverData>
-      <paths name="Copy of project-level server 'titan x'">
+      <paths name="cloud">
         <serverdata>
           <mappings>
-            <mapping deploy="/root/PySGG-cxg" local="$PROJECT_DIR$" web="/" />
+            <mapping deploy="/root/autodl-tmp/PySGG-cxg" local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>
@@ -27,13 +27,6 @@
         <serverdata>
           <mappings>
             <mapping deploy="/root/PySGG-cxg" local="$PROJECT_DIR$" web="/" />
-          </mappings>
-        </serverdata>
-      </paths>
-      <paths name="titan xp">
-        <serverdata>
-          <mappings>
-            <mapping local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>

@@ -3,6 +3,9 @@
   <component name="SshConfigs">
     <configs>
       <sshConfig authType="PASSWORD" host="10.193.5.194" id="66aed3c9-ef78-4e19-89f4-53d3dea5e71b" port="9989" nameFormat="DESCRIPTIVE" username="root" />
+      <sshConfig authType="PASSWORD" connectionConfig="{&quot;serverAliveInterval&quot;:300}" host="region-4.autodl.com " id="bb445a44-d081-4feb-8d81-ff4d930693c6" port="46289" customName="cloud" nameFormat="CUSTOM" username="root">
+        <option name="customName" value="cloud" />
+      </sshConfig>
     </configs>
   </component>
 </project>

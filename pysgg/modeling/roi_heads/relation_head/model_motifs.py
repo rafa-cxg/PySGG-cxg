@@ -377,7 +377,7 @@ class LSTMContext(nn.Module):
             holder = holder * (1 - self.average_ratio) + self.average_ratio * input.mean(0).view(-1)
         return holder
 
-    def forward(self, x, proposals, rel_pair_idxs, logger=None, all_average=False, ctx_average=False):
+    def forward(self, x,proposals,rel_pair_idxs, logger=None, all_average=False, ctx_average=False):
         # labels will be used in DecoderRNN during training (for nms)
         if self.training or self.cfg.MODEL.ROI_RELATION_HEAD.USE_GT_BOX:
             obj_labels = cat([proposal.get_field("labels") for proposal in proposals], dim=0)

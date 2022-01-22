@@ -2,13 +2,6 @@
 <project version="4">
   <component name="WebServers">
     <option name="servers">
-      <webServer id="e5e6795a-e870-47c4-bcc2-8b462edee621" name="titan xp">
-        <fileTransfer accessType="SFTP" host="10.193.0.26" port="9989" sshConfigId="ed98e009-ef42-4464-8cae-8b54b6343e47" sshConfig="root@10.193.0.26:9989 password">
-          <advancedOptions>
-            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
-          </advancedOptions>
-        </fileTransfer>
-      </webServer>
       <webServer id="c376c7e1-c852-4044-8d79-e1810234dd27" name="titan x" url="http://localhost">
         <fileTransfer accessType="SFTP" host="10.193.0.26" port="9989" sshConfigId="ed98e009-ef42-4464-8cae-8b54b6343e47" sshConfig="root@10.193.0.26:9989 password">
           <advancedOptions>

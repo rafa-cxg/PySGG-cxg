@@ -98,7 +98,7 @@ def get_loader(cfg, train_ids, test_ids, sg_data, test_on=False, val_on=False, n
     loader = torch.utils.data.DataLoader(split,
         batch_size=cfg.SOLVER.IMS_PER_BATCH,
         shuffle=not (test_on or val_on),  # only shuffle the data in training
-        pin_memory=True,
+        pin_memory=False,
         num_workers=4,
         collate_fn=SimpleCollator(),
     )

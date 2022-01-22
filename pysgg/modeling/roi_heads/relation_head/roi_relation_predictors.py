@@ -1021,7 +1021,7 @@ class MotifPredictor(nn.Module):
         else:
             self.union_single_not_match = False
 
-        self.use_obj_recls_logits = config.MODEL.ROI_RELATION_HEAD.REL_OBJ_MULTI_TASK_LOSS
+        self.use_obj_recls_logits = config.MODEL.ROI_RELATION_HEAD.REL_OBJ_MULTI_TASK_LOSS#todo 考虑把这个和下面的设置为true
         self.use_obj_recls_labels = config.MODEL.ROI_RELATION_HEAD.OBJECT_CLASSIFICATION_REFINE
         self.obj_recls_logits_update_manner = (
             config.MODEL.ROI_RELATION_HEAD.OBJECT_CLASSIFICATION_MANNER
@@ -1110,9 +1110,9 @@ class MotifPredictor(nn.Module):
         # pairs union
         if self.use_vision:
             if self.union_single_not_match:
-                prod_rep = prod_rep * self.up_dim(union_features)
+                prod_rep = prod_rep + self.up_dim(union_features)# cxg:我把这里改成+了
             else:
-                prod_rep = prod_rep * union_features
+                prod_rep = prod_rep + union_features
 
         rel_dists = self.rel_compress(prod_rep)
 

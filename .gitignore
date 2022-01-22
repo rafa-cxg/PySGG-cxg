@@ -2,3 +2,5 @@
 /datasets/
 /docker/
 /pysgg.egg-info/
+/pysgg/csrc/
+/datasets/vg/

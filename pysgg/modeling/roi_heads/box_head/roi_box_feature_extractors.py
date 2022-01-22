@@ -64,11 +64,17 @@ class ResNet50Conv5ROIFeatureExtractor(nn.Module):
             self.fc7 = make_fc(input_size, out_dim, use_gn)
             self.resize_channels = input_size
             self.flatten_out_channels = out_dim
+            if cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ and for_relation:
+                self.visual_language_merger_obj = make_visual_language_merger_obj(
+                    cfg)  # language和visual融合
+            self.cfg = cfg
+            self.for_relation = for_relation
 
     def forward(self, x, proposals):
         x = self.pooler(x, proposals)
         x = self.head(x)
-        return x
+
+        return x#torch.Size([20131, 2048, 4, 4])
 
     def forward_without_pool(self, x):
         x = self.head(x)
@@ -270,10 +276,13 @@ class make_visual_language_merger_obj(nn.Module):
                     obj_labels.long())  # word embedding层，输入word标签得embedding
 
             else:
-                # obj_logits = torch.cat([proposal.get_field("predict_logits") for proposal in proposals], dim=0).detach()
-                # wordembedding_corpus = obj_logits @ self.languageembedding.weight  # ?
-                obj_labels = torch.cat([proposal.get_field("pred_labels") for proposal in proposals], dim=0).detach()
-                wordembedding_corpus =self.languageembedding(obj_labels.long())
+                if self.cfg.MODEL.ROI_RELATION_HEAD.use_possibility_merger:
+
+                    obj_logits = torch.cat([proposal.get_field("predict_logits") for proposal in proposals], dim=0).detach()
+                    wordembedding_corpus = obj_logits @ self.languageembedding.weight  # ?
+                else:
+                    obj_labels = torch.cat([proposal.get_field("pred_labels") for proposal in proposals], dim=0).detach()
+                    wordembedding_corpus =self.languageembedding(obj_labels.long())
 
         pos_embed = self.pos_embed(encode_box_info(proposals))
         num = [len(proposal) for proposal in proposals]

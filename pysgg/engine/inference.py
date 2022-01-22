@@ -29,7 +29,7 @@ def compute_on_dataset(model, data_loader, device, synchronize_gather=True, time
     results_dict = {}
     cpu_device = torch.device("cpu")
     for _, batch in enumerate(tqdm(data_loader)):#这就是总数2500的地方
-        torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
         with torch.no_grad():
             images, targets, image_ids = batch
             targets = [target.to(device) for target in targets]
@@ -62,7 +62,7 @@ def compute_on_dataset(model, data_loader, device, synchronize_gather=True, time
                 {img_id: result for img_id, result in zip(image_ids, output)}
             )
         del output
-        torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
     return results_dict
 
 

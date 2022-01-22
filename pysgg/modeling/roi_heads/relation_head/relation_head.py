@@ -191,6 +191,8 @@ class ROIRelationHead(torch.nn.Module):
         roi_features = self.box_feature_extractor(features, proposals)#roi_align, roi_features:[num_prop,4096]
         if isinstance(self.box_feature_extractor, ResNet50Conv5ROIFeatureExtractor):
             roi_features = self.box_feature_extractor.flatten_roi_features(roi_features)
+            if self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ :
+                roi_features = self.box_feature_extractor.visual_language_merger_obj(roi_features, proposals)
 
         rel_pn_loss = None
         relness_matrix = None
