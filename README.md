@@ -60,6 +60,7 @@ gpu_num=2 && python -m torch.distributed.launch --master_port 10028 --nproc_per_
         SOLVER.CHECKPOINT_PERIOD 500\
         MODEL.PRETRAINED_DETECTOR_CKPT "checkpoints/detection/pretrained_faster_rcnn/vg_faster_det.pth"\
         SOLVER.BASE_LR 0.006 \
+        DATALOADER.NUM_WORKERS 0 \
         MODEL.TWO_STAGE_ON True \
         MODEL.TWO_STAGE_HEAD.LOSS_TYPE 'cos_loss' \
         MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_EDGE True \
@@ -83,6 +84,7 @@ gpu_num=2 && python -m torch.distributed.launch --master_port 10028 --nproc_per_
         SOLVER.CHECKPOINT_PERIOD 500\
         MODEL.PRETRAINED_DETECTOR_CKPT "checkpoints/detection/pretrained_faster_rcnn/vg_faster_det.pth"\
         SOLVER.BASE_LR 0.006 \
+        DATALOADER.NUM_WORKERS 0 \
         MODEL.TWO_STAGE_ON False \
         MODEL.TWO_STAGE_HEAD.LOSS_TYPE 'cos_loss' \
         MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_EDGE True \
@@ -92,11 +94,11 @@ gpu_num=2 && python -m torch.distributed.launch --master_port 10028 --nproc_per_
 ```
 For baseline Unbiasd, all you need to do is set those :
 ```
-MODEL.ROI_RELATION_HEAD.PREDICTOR CausalAnalysisPredictor
-MODEL.ROI_RELATION_HEAD.CAUSAL.AUXILIARY_LOSS True
-MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER bgnn #or motifs
-MODEL.ROI_RELATION_HEAD.CAUSAL.EFFECT_ANALYSIS true
-MODEL.ROI_RELATION_HEAD.CAUSAL.EFFECT_TYPE TDE
+MODEL.ROI_RELATION_HEAD.PREDICTOR CausalAnalysisPredictor \
+MODEL.ROI_RELATION_HEAD.CAUSAL.AUXILIARY_LOSS True \
+MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER bgnn #or motifs \
+MODEL.ROI_RELATION_HEAD.CAUSAL.EFFECT_ANALYSIS true \
+MODEL.ROI_RELATION_HEAD.CAUSAL.EFFECT_TYPE TDE \
 ```
 We also provide the trained model pth of [BGNN(vg)](https://shanghaitecheducn-my.sharepoint.com/:u:/g/personal/lirj2_shanghaitech_edu_cn/Ee4PdxluTphEicUDckJIfmEBisAyUgkjeuerN_rjrG1CIw?e=pgr8a5),[BGNN(oiv6)](https://shanghaitecheducn-my.sharepoint.com/:u:/g/personal/lirj2_shanghaitech_edu_cn/EdKOrWAOf4hMiDWbR3CgYrMB9w7ZwWul-Wc6IUSbs51Idw?e=oEEHIQ)
 
