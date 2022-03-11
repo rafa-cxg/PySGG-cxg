@@ -1,10 +1,9 @@
-# A Toolkit for Scene Graph Benchmark in Pytorch(PySGG)
+# Biasing like human: a cognitive bias framework for scene graph generation
 
-[![LICENSE](https://img.shields.io/badge/license-MIT-green)](https://github.com/KaihuaTang/Scene-Graph-Benchmark.pytorch/blob/master/LICENSE)
 [![Python](https://img.shields.io/badge/python-3.7-blue.svg)](https://www.python.org/)
 ![PyTorch](https://img.shields.io/badge/pytorch-1.4.0-%237732a8)
 
-Our paper [Biasing like human: a human intuition framework for scene graph generation] official code
+Our paper [Biasing like human: a cognitive bias framework for scene graph generation] official code
 <!-- (https://arxiv.org/abs/2104.00308) has been accepted by CVPR 2021. -->
 
 ## Installation
@@ -20,8 +19,6 @@ Check [DATASET.md](DATASET.md) for instructions of dataset preprocessing.
 ### Prepare Faster-RCNN Detector
 - You can download the pretrained Faster R-CNN we used in the paper: 
   - [VG](https://shanghaitecheducn-my.sharepoint.com/:u:/g/personal/lirj2_shanghaitech_edu_cn/EQIy64T-EK9Er9y8kVCDaukB79gJwfSsEIbey9g0Xag6lg?e=wkKHJs), 
-  - [OIv6](https://shanghaitecheducn-my.sharepoint.com/:u:/g/personal/lirj2_shanghaitech_edu_cn/EfGXxc9byEtEnYFwd0xdlYEBcUuFXBjYxNUXVGkgc-jkfQ?e=lSlqnz), 
-  - [OIv4](https://shanghaitecheducn-my.sharepoint.com/:u:/g/personal/lirj2_shanghaitech_edu_cn/EVWy0xJRx8RNo-zHF5bdANMBTYt6NvAaA59U32o426bRqw?e=iPVc0O) 
 - put the checkpoint into the folder:
 ```
 mkdir -p checkpoints/detection/pretrained_faster_rcnn/
@@ -29,7 +26,7 @@ mkdir -p checkpoints/detection/pretrained_faster_rcnn/
 mv /path/vg_faster_det.pth checkpoints/detection/pretrained_faster_rcnn/
 ```
 
-Then, you need to modify the pretrained weight parameter `MODEL.PRETRAINED_DETECTOR_CKPT` in configs yaml `configs/e2e_relBGNN_vg-oiv6-oiv4.yaml` to the path of corresponding pretrained rcnn weight to make sure you load the detection weight parameter correctly.
+Then, you need to modify the pretrained weight parameter `MODEL.PRETRAINED_DETECTOR_CKPT` in configs yaml `configs/bgnn.yaml` to the path of corresponding pretrained rcnn weight to make sure you load the detection weight parameter correctly.
 
 
 
