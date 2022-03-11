@@ -30,22 +30,22 @@ Then, you need to modify the pretrained weight parameter `MODEL.PRETRAINED_DETEC
 
 
 
-### H-bias framework
+### C-bias framework
 You can follow the following instructions to train your own, which takes 2 GPUs for traing. The results should be very close to the reported results given in paper.
-#### H-bias framework auguments:
+#### C-bias framework auguments:
 3 paradiagms are enabled following 3 commands:
 ```
-MODEL.TWO_STAGE_ON True
-MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_EDGE True
-MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ True
+MODEL.TWO_STAGE_ON True #For EEM
+MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_EDGE True #For LMM
+MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ True  #For SEM
 ```
 you can copy the following command to train
 #### Scripts
-For baseline bgnn, we use configration file [configs/author_predcls.yaml](configs/author_predcls.yaml) provided by author:
+For baseline bgnn, we use configration file [configs/bgnn.yaml](configs/bgnn.yaml) provided by author:
 ```
 gpu_num=2 && python -m torch.distributed.launch --master_port 10028 --nproc_per_node=$gpu_num \
        tools/relation_train_net.py \
-       --config-file "configs/author_predcls.yaml" \
+       --config-file "configs/bgnn.yaml" \
         DEBUG False \
         EXPERIMENT_NAME "human_bgnn" \
         MODEL.ROI_RELATION_HEAD.PREDICTOR BGNNPredictor \
@@ -82,7 +82,7 @@ gpu_num=2 && python -m torch.distributed.launch --master_port 10028 --nproc_per_
         MODEL.PRETRAINED_DETECTOR_CKPT "checkpoints/detection/pretrained_faster_rcnn/vg_faster_det.pth"\
         SOLVER.BASE_LR 0.006 \
         DATALOADER.NUM_WORKERS 0 \
-        MODEL.TWO_STAGE_ON False \
+        MODEL.TWO_STAGE_ON True \
         MODEL.TWO_STAGE_HEAD.LOSS_TYPE 'cos_loss' \
         MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_EDGE True \
         MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ True \
@@ -97,7 +97,7 @@ MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER bgnn #or motifs \
 MODEL.ROI_RELATION_HEAD.CAUSAL.EFFECT_ANALYSIS true \
 MODEL.ROI_RELATION_HEAD.CAUSAL.EFFECT_TYPE TDE \
 ```
-We also provide the trained model pth of [BGNN(vg)](https://shanghaitecheducn-my.sharepoint.com/:u:/g/personal/lirj2_shanghaitech_edu_cn/Ee4PdxluTphEicUDckJIfmEBisAyUgkjeuerN_rjrG1CIw?e=pgr8a5),[BGNN(oiv6)](https://shanghaitecheducn-my.sharepoint.com/:u:/g/personal/lirj2_shanghaitech_edu_cn/EdKOrWAOf4hMiDWbR3CgYrMB9w7ZwWul-Wc6IUSbs51Idw?e=oEEHIQ)
+We also provide the trained model pth of [BGNN(vg)](https://shanghaitecheducn-my.sharepoint.com/:u:/g/personal/lirj2_shanghaitech_edu_cn/Ee4PdxluTphEicUDckJIfmEBisAyUgkjeuerN_rjrG1CIw?e=pgr8a5) 
 
 
 
@@ -105,7 +105,7 @@ We also provide the trained model pth of [BGNN(vg)](https://shanghaitecheducn-my
 Similarly, we also provide the `rel_test.sh` for directly produce the results from the checkpoint provide by us.
 By replacing the parameter of `MODEL.WEIGHT` to the trained model weight and selected dataset name in `DATASETS.TEST`, you can directly eval the model on validation or test set.
 ```
-archive_dir="checkpoints/predcls-BGNNPredictor/h-bias/"
+archive_dir="checkpoints/predcls-BGNNPredictor/c-bias/"
 
 python -m torch.distributed.launch --master_port 10029 --nproc_per_node=$gpu_num  \
   tools/relation_test_net.py \
