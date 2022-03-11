@@ -51,7 +51,7 @@ gpu_num=2 && python -m torch.distributed.launch --master_port 10028 --nproc_per_
         MODEL.ROI_RELATION_HEAD.PREDICTOR BGNNPredictor \
         MODEL.ROI_RELATION_HEAD.USE_GT_BOX False \
         MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL False \
-        SOLVER.IMS_PER_BATCH $[6*$gpu_num] \
+        SOLVER.IMS_PER_BATCH $[10*$gpu_num] \
         TEST.IMS_PER_BATCH $[$gpu_num] \
         SOLVER.VAL_PERIOD 500 \
         SOLVER.CHECKPOINT_PERIOD 500\
@@ -65,7 +65,7 @@ gpu_num=2 && python -m torch.distributed.launch --master_port 10028 --nproc_per_
         
         
 ```
-For baseline MOTIFs:
+For baseline MOTIFs, IMP, G-RCNN, Transformer..., ypu just need to change `MODEL.ROI_RELATION_HEAD.PREDICTOR` to one of `MotifPredictor`, `IMPPredictor`, `AGRCNNPredictor`,`TransformerPredictor`:
 ```
 gpu_num=2 && python -m torch.distributed.launch --master_port 10028 --nproc_per_node=$gpu_num \
        tools/relation_train_net.py \
@@ -80,7 +80,7 @@ gpu_num=2 && python -m torch.distributed.launch --master_port 10028 --nproc_per_
         SOLVER.VAL_PERIOD 500 \
         SOLVER.CHECKPOINT_PERIOD 500\
         MODEL.PRETRAINED_DETECTOR_CKPT "checkpoints/detection/pretrained_faster_rcnn/vg_faster_det.pth"\
-        SOLVER.BASE_LR 0.006 \
+        SOLVER.BASE_LR 0.02 \
         DATALOADER.NUM_WORKERS 0 \
         MODEL.TWO_STAGE_ON True \
         MODEL.TWO_STAGE_HEAD.LOSS_TYPE 'cos_loss' \
