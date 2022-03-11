@@ -102,21 +102,21 @@ We also provide the trained model pth of [BGNN(vg)](https://shanghaitecheducn-my
 
 
 ## Test
-Similarly, we also provide the `rel_test.sh` for directly produce the results from the checkpoint provide by us.
-By replacing the parameter of `MODEL.WEIGHT` to the trained model weight and selected dataset name in `DATASETS.TEST`, you can directly eval the model on validation or test set.
+You can directly check performance of model from the checkpoint. By replacing the parameter of `MODEL.WEIGHT` to the trained model weight and selected dataset name in `DATASETS.TEST`, you can directly eval the model on validation or test set.
 ```
-archive_dir="checkpoints/predcls-BGNNPredictor/c-bias/"
+archive_dir="checkpoints/predcls-BGNNPredictor/xxx/xxx"
 
 python -m torch.distributed.launch --master_port 10029 --nproc_per_node=$gpu_num  \
   tools/relation_test_net.py \
   --config-file "$archive_dir/config.yml"\
     TEST.IMS_PER_BATCH $[$gpu_num] \
-   MODEL.WEIGHT  "$archive_dir/model_0020000.pth"\
+   MODEL.WEIGHT  "$archive_dir/model_xxx.pth"\
    MODEL.ROI_RELATION_HEAD.EVALUATE_REL_PROPOSAL False \
-   DATASETS.TEST "('VG_stanford_filtered_with_attribute_test', )"
+   DATASETS.TEST "('VG_stanford_filtered_with_attribute_eval', )"
 
 ```
 ### visiualization
+
 
 ## Citations
 
