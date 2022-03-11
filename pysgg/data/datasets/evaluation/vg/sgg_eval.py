@@ -245,8 +245,8 @@ class SGNoGraphConstraintRecall(SceneGraphEvaluation):
         pred_classes = local_container["pred_classes"]
         gt_rels = local_container["gt_rels"]
 
-        obj_scores_per_rel = obj_scores[pred_rel_inds].prod(1)
-        nogc_overall_scores = obj_scores_per_rel[:, None] * rel_scores[:, 1:]
+        obj_scores_per_rel = obj_scores[pred_rel_inds].prod(1)#把sub obj的score乘起来
+        nogc_overall_scores = obj_scores_per_rel[:, None] * rel_scores[:, 1:]#sub obj 与每一个rel对应的score:[n,50]
         nogc_score_inds = argsort_desc(nogc_overall_scores)[:100]
         nogc_pred_rels = np.column_stack(
             (pred_rel_inds[nogc_score_inds[:, 0]], nogc_score_inds[:, 1] + 1)
@@ -723,7 +723,7 @@ class SGStagewiseRecall(SceneGraphEvaluation):
             )
 
         self.mp_pair_refine_iter = 1
-        if cfg.MODEL.ROI_RELATION_HEAD.PREDICTOR == "BGNNPredictor":
+        if cfg.MODEL.ROI_RELATION_HEAD.PREDICTOR == "BGNNPredictor" or (cfg.MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER=='bgnn' and cfg.MODEL.ROI_RELATION_HEAD.PREDICTOR == "CausalAnalysisPredictor"):
             self.mp_pair_refine_iter = (
                 cfg.MODEL.ROI_RELATION_HEAD.BGNN_MODULE.ITERATE_MP_PAIR_REFINE
             )

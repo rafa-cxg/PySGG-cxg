@@ -5,7 +5,7 @@ import random
 from collections import defaultdict, OrderedDict, Counter
 import pickle
 import math
-
+import time
 import h5py
 import numpy as np
 import torch
@@ -46,7 +46,7 @@ class VGDataset(torch.utils.data.Dataset):
 
     def __init__(self, split, img_dir, roidb_file, dict_file, image_file, transforms=None,
                  filter_empty_rels=True, num_im=-1, num_val_im=5000, check_img_file=False,
-                 filter_duplicate_rels=True, filter_non_overlap=True, flip_aug=True):
+                 filter_duplicate_rels=True, filter_non_overlap=True, flip_aug=True, custom_eval=False, custom_path=''):
         """
         Torch dataset for VisualGenome
         Parameters:
@@ -94,25 +94,25 @@ class VGDataset(torch.utils.data.Dataset):
 
         self.categories = {i: self.ind_to_classes[i]
                            for i in range(len(self.ind_to_classes))}
-                           
-        self.split_mask, self.gt_boxes, self.gt_classes, self.gt_attributes, self.relationships = load_graphs(#读取h4文件，把gt导入变量中.此时不包括transform和论文中采样method
-            self.roidb_file, self.split, num_im, num_val_im=num_val_im,
-            filter_empty_rels=False if not cfg.MODEL.RELATION_ON and split == "train" else True,
-            filter_non_overlap=self.filter_non_overlap,
-        )
+        self.custom_eval = custom_eval
+        if self.custom_eval:
+            self.get_custom_imgs(custom_path)
+        else:
+            self.split_mask, self.gt_boxes, self.gt_classes, self.gt_attributes, self.relationships = load_graphs(#读取h4文件，把gt导入变量中.此时不包括transform和论文中采样method
+                self.roidb_file, self.split, num_im, num_val_im=num_val_im,
+                filter_empty_rels=False if not cfg.MODEL.RELATION_ON and split == "train" else True,
+                filter_non_overlap=self.filter_non_overlap,
+            )
 
-        self.filenames, self.img_info = load_image_filenames(
-            img_dir, image_file, self.check_img_file)  # length equals to split_mask. filenames包括整个数据集的图片
-        self.filenames = [self.filenames[i]#现在只剩下过滤后的图片了
-                          for i in np.where(self.split_mask)[0]]#list:57723. like 'datasets/vg/stanford_spilt/VG_100k_images/498334.jpg'
-        self.img_info = [self.img_info[i] for i in np.where(self.split_mask)[0]]
-        self.idx_list = list(range(len(self.filenames)))
+            self.filenames, self.img_info = load_image_filenames(
+                img_dir, image_file, self.check_img_file)  # length equals to split_mask. filenames包括整个数据集的图片
+            self.filenames = [self.filenames[i]#现在只剩下过滤后的图片了
+                              for i in np.where(self.split_mask)[0]]#list:57723. like 'datasets/vg/stanford_spilt/VG_100k_images/498334.jpg'
+            self.img_info = [self.img_info[i] for i in np.where(self.split_mask)[0]]
+            self.idx_list = list(range(len(self.filenames)))
 
-        self.id_to_img_map = {k: v for k, v in enumerate(self.idx_list)}
-
-
-
-        self.pre_compute_bbox = None
+            self.id_to_img_map = {k: v for k, v in enumerate(self.idx_list)}
+            self.pre_compute_bbox = None
         if cfg.DATASETS.LOAD_PRECOMPUTE_DETECTION_BOX:
             """precoompute boxes format:
                 index by the image id, elem has "scores", "bbox", "cls", 3 fields
@@ -151,6 +151,12 @@ class VGDataset(torch.utils.data.Dataset):
         # if self.split == 'train':
         #    while(random.random() > self.img_info[index]['anti_prop']):
         #        index = int(random.random() * len(self.filenames))
+        if self.custom_eval:
+            img = Image.open(self.custom_files[index]).convert("RGB")
+            target = torch.LongTensor([-1])
+            if self.transforms is not None:
+                img, target = self.transforms(img, target)
+            return img, target, index
         if self.repeat_dict is not None:
             index = self.idx_list[index]#list:165908[0,0,1,1..]类似对数据集的照片index做了重定向（重复index的内容来增加图像数目）
 
@@ -354,6 +360,8 @@ class VGDataset(torch.utils.data.Dataset):
         return target
 
     def __len__(self):
+        if self.custom_eval:
+            return len(self.custom_files)
         return len(self.idx_list)
 
 def get_VG_statistics(train_data, must_overlap=True):
@@ -491,14 +499,17 @@ def load_image_filenames(img_dir, image_file, check_img_file):
     fns = []
     img_info = []
     for i, img in enumerate(im_data):
+        # print(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
+
         basename = '{}.jpg'.format(img['image_id'])
+        # print(img['image_id'])
         if basename in corrupted_ims:
             continue
 
         filename = os.path.join(img_dir, basename)
-        if os.path.exists(filename) or not check_img_file:
-            fns.append(filename)
-            img_info.append(img)
+        # if os.path.exists(filename) or not check_img_file:# commit for faster. we do not know consequence
+        fns.append(filename)
+        img_info.append(img)
     assert len(fns) == 108073
     assert len(img_info) == 108073
     return fns, img_info

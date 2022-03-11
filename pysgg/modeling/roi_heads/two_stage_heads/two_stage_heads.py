@@ -120,8 +120,8 @@ class Two_Stage_Head(torch.nn.Module):
             feat_dim=4096#权宜之计，这里并不用到它
         self.make_prior_distribution = make_prior_distribution(cfg, in_channels)
 
-
-        self.two_stage_predictor = make_Two_Stage_predictor(cfg, feat_dim)
+        if cfg.MODEL.TWO_STAGE_ON:
+            self.two_stage_predictor = make_Two_Stage_predictor(cfg, feat_dim)
 
         self.post_processor = make_roi_relation_post_processor(cfg)
         self.loss_evaluator_2stage = make_two_stage_loss_evaluator(cfg)
@@ -294,29 +294,33 @@ class Two_Stage_Head(torch.nn.Module):
 
 
             return  result,sampling, {}
-        if self.loss_distribution:
-            try:
-                distribution
-            except NameError:
-                print("Check in whether \"PURE_SENMENTIC\" is ON in cfg file!")
-
-
-            loss_relation =self.loss_evaluator_distribution(relation_logits,rel_labels_all,distribution)
+        if self.cfg.MODEL.TWO_STAGE_HEAD.USE_TWOSTAGE_LOSS==False:
+            output_losses=None
+            pass
         else:
-            loss_relation = self.loss_evaluator_2stage(
-            proposals, rel_labels_all, relation_logits
-        )
-        #torch.argmax(relation_logits[0][:,1:],-1)+1
-        output_losses = dict()
+            if self.loss_distribution:
+                try:
+                    distribution
+                except NameError:
+                    print("Check in whether \"PURE_SENMENTIC\" is ON in cfg file!")
 
-        output_losses = dict(loss_two_stage=loss_relation)
-        output_losses_checked = {}#check whether loss is none
-        if self.training:
-            for key in output_losses.keys():
-                if output_losses[key] is not None:
-                    if output_losses[key].grad_fn is not None:
-                        output_losses_checked[key] = output_losses[key]
-        output_losses = output_losses_checked
+
+                loss_relation =self.loss_evaluator_distribution(relation_logits,rel_labels_all,distribution)
+            else:
+                loss_relation = self.loss_evaluator_2stage(
+                proposals, rel_labels_all, relation_logits
+            )
+            #torch.argmax(relation_logits[0][:,1:],-1)+1
+            output_losses = dict()
+
+            output_losses = dict(loss_two_stage=loss_relation)
+            output_losses_checked = {}#check whether loss is none
+            if self.training:
+                for key in output_losses.keys():
+                    if output_losses[key] is not None:
+                        if output_losses[key].grad_fn is not None:
+                            output_losses_checked[key] = output_losses[key]
+            output_losses = output_losses_checked
 
 
         return  proposals,sampling, output_losses#roi_features:[num_all_prop,4096]

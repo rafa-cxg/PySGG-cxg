@@ -62,7 +62,7 @@ torch.backends.cudnn.enabled = True  # 默认值
 torch.backends.cudnn.benchmark = True  # 默认为False
 torch.backends.cudnn.deterministic = True  # 默认为False;benchmark为True时,y要排除随机性必须为True
 
-
+# torch.backends.cudnn.enabled=False  #when train motif
 torch.autograd.set_detect_anomaly(True)
 
 SHOW_COMP_GRAPH = False
@@ -296,7 +296,7 @@ def train(
     arguments = {}
     if cfg.MODEL.PRETRAINED_DETECTOR_CKPT != "":#todo 加入对先前训练最佳值的记录
         checkpoint=checkpointer.load(
-            cfg.MODEL.PRETRAINED_DETECTOR_CKPT, with_optim=False,update_schedule=True , load_mapping=load_mapping
+            cfg.MODEL.PRETRAINED_DETECTOR_CKPT, with_optim=False,update_schedule=False , load_mapping=load_mapping
         )
         if cfg.MODEL.PRETRAINED_DETECTOR_CKPT=='checkpoints/detection/pretrained_faster_rcnn/vg_faster_det.pth':#如果从detection模型开始训练，起始Iter应设置0
             arguments["iteration"]=0
@@ -387,13 +387,13 @@ def train(
     if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_BOX:
         if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL:
             mode = "predcls"
-            recall_highest_setting = 0.35  # 暂时
+            recall_highest_setting = 0.29  # 暂时
         else:
             mode = "sgcls"
-            recall_highest_setting = 0.07#0.15
+            recall_highest_setting = 0.10#0.15
     else:
         mode = "sgdet"
-        recall_highest_setting = 0.06#0.1715  # 暂时
+        recall_highest_setting = 0.04#0.1715  # 暂时
 
     if cfg.USE_CLUSTER==True:
         if os.path.isfile(cfg.OUTPUT_DIR+'/cluster_on_dataset.pkl')==False:#存放数据集Instance的feature文件
@@ -407,7 +407,7 @@ def train(
         else:
             with open(os.path.join(cfg.OUTPUT_DIR, "cluster_on_dataset.pkl"), 'rb') as f:
                 feature=pickle.load(f)
-        #clustering algorithm to use
+        #clustering algorithm tomerger use
         if is_main_process():
             deepcluster = clustering.__dict__['Kmeans'](3)
         # clustering_loss = deepcluster.faiss_cluster(feature.to('cpu').numpy())
@@ -433,10 +433,15 @@ def train(
 
 
         losses = sum(loss for loss in loss_dict.values())
-        if cfg.MODEL.TWO_STAGE_ON: #只有使用2stage时候才考虑loss为0的问题
-            if losses==0 or ('loss_two_stage' not in loss_dict.keys()):
-                print('counter nan: pass this iter\n')
-                print('print loss_dict: .{}'.format(loss_dict))
+        # losses =  loss_dict['loss_rel'] + 10 * loss_dict['loss_two_stage']
+        if cfg.MODEL.ROI_RELATION_HEAD.PREDICTOR=='MotifPredictor' and cfg.MODEL.ROI_RELATION_HEAD.OBJECT_CLASSIFICATION_REFINE:
+            losses = 2 * loss_dict['loss_rel'] + 2 * loss_dict['loss_two_stage'] + sum(
+                loss for loss in loss_dict.values())
+
+        # if cfg.MODEL.TWO_STAGE_ON: #只有使用2stage时候才考虑loss为0的问题
+        #     if losses==0 or ('loss_two_stage' not in loss_dict.keys()):
+        #         print('counter nan: pass this iter\n')
+        #         print('print loss_dict: .{}'.format(loss_dict))
 
             # num_gpus=get_world_size()
             # get_rank() == 0
@@ -448,6 +453,7 @@ def train(
         loss_dict_reduced = reduce_loss_dict(loss_dict)#
         # print('rank:{}'.format(get_rank()))
         losses_reduced = sum(loss for loss in loss_dict_reduced.values())
+        #for motif
 
         meters.update(loss=losses_reduced, **loss_dict_reduced)
         optimizer.zero_grad()
@@ -517,7 +523,7 @@ def train(
 
             logger.log(
                 TFBoardHandler_LEVEL,
-                ({"curr_lr": float(optimizer.param_groups[0]["lr"])}, iteration),
+                ({"curr_lr": float(optimizer.param_groups[0]["lr"])}, iteration),#只是显示了第一层的learning rate
             )
             # save_buffer(output_dir)
 
@@ -797,7 +803,7 @@ def main():
 
 
 if __name__ == "__main__":
-    os.environ["OMP_NUM_THREADS"] = "8"
+    # os.environ["OMP_NUM_THREADS"] = "12"
 
 
     main()

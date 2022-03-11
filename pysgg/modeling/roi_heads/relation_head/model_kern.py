@@ -333,6 +333,9 @@ class InstanceFeaturesAugments(nn.Module):
             self.embed_dim = 0
 
         self.effect_analysis = False
+        if self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ:
+            self.language_obj_dim=512
+        else: self.language_obj_dim=0
         # position embedding
         # encode the geometry information of bbox in relationships
         self.geometry_feat_dim = 128
@@ -342,7 +345,7 @@ class InstanceFeaturesAugments(nn.Module):
         ])
 
         # map bidirectional hidden states of dimension self.hidden_dim*2 to self.hidden_dim
-        self.obj_hidden_linear = nn.Linear(self.obj_dim + self.embed_dim + self.geometry_feat_dim,
+        self.obj_hidden_linear = nn.Linear(self.obj_dim + self.embed_dim + self.geometry_feat_dim+self.language_obj_dim,
                                            self.obj_rep_out_dim)
         if self.use_obj_pairwise_feats:
             self.edges_hidden_linear = nn.Linear(self.obj_rep_out_dim + self.obj_dim + self.embed_dim,

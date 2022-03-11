@@ -27,14 +27,15 @@ class CombinedROIHeads(torch.nn.ModuleDict):
         losses = {}
         '''x:torch.Size([960, 4096])是nms筛选后的proposal feature.960=12*80
         如果是predcls:x:torch.Size([num_gt_allimage, 4096])  proposals:每个图片有1000+gt个 box '''
-        x, detections, loss_box = self.box(features, proposals, targets)#ROIBoxHead的forward,x是proposal对应的visual feature.,detections是每个图的
+        x, detections, loss_box = self.box(features, proposals, targets)#ROIBoxHead的forward,x是proposal对应的visual feature.,detections是每个图的,proposals只有'objectness'
         if not self.cfg.MODEL.RELATION_ON:
             # During the relationship training stage, the bbox_proposal_network should be fixed, and no loss. 
             losses.update(loss_box)
 
         if self.cfg.MODEL.TWO_STAGE_ON:
             detections,sampling,loss_two_stage = self.twostage(features, detections, targets, logger)#detection添加'two_stage_pred_rel_logits'
-            losses.update(loss_two_stage)#此时Loss还没包含任何内容
+            if loss_two_stage!=None:
+                losses.update(loss_two_stage)#此时Loss还没包含任何内容
         if self.cfg.MODEL.ATTRIBUTE_ON:
             # Attribute head don't have a separate feature extractor
             z, detections, loss_attribute = self.attribute(features, detections, targets)

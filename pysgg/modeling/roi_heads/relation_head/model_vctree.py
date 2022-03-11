@@ -80,6 +80,9 @@ class VCTreeLSTMContext(nn.Module):
         self.obj_classes = obj_classes
         self.rel_classes = rel_classes
         self.num_obj_classes = len(obj_classes)
+        if self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ:
+            self.language_obj_dim=512
+        else: self.language_obj_dim=0
 
         # mode
         if self.cfg.MODEL.ROI_RELATION_HEAD.USE_GT_BOX:
@@ -133,7 +136,7 @@ class VCTreeLSTMContext(nn.Module):
             co_occour = co_occour + co_occour.transpose(0, 1)
             self.bi_freq_prior.weight.copy_(co_occour.view(-1).unsqueeze(0), non_blocking=True)
 
-        self.obj_reduce = nn.Linear(self.obj_dim, 128)
+        self.obj_reduce = nn.Linear(self.obj_dim+ self.language_obj_dim, 128)
         self.emb_reduce = nn.Linear(self.embed_dim, 128)
         self.score_pre = nn.Linear(128 * 4, self.hidden_dim)
         self.score_sub = nn.Linear(self.hidden_dim, self.hidden_dim)
@@ -147,16 +150,16 @@ class VCTreeLSTMContext(nn.Module):
         layer_init(self.score_obj, xavier=True)
 
         self.obj_ctx_rnn = MultiLayer_BTreeLSTM(
-            in_dim=self.obj_dim + self.embed_dim + 128,
+            in_dim=self.obj_dim + self.embed_dim + 128+ self.language_obj_dim,
             out_dim=self.hidden_dim,
             num_layer=self.nl_obj,
             dropout=self.dropout_rate if self.nl_obj > 1 else 0)
         self.decoder_rnn = DecoderTreeLSTM(self.cfg, self.obj_classes, embed_dim=self.embed_dim,
-                                           inputs_dim=self.hidden_dim + self.obj_dim + self.embed_dim + 128,
+                                           inputs_dim=self.hidden_dim + self.obj_dim + self.embed_dim + 128+ self.language_obj_dim,
                                            hidden_dim=self.hidden_dim,
                                            dropout=self.dropout_rate)
         self.edge_ctx_rnn = MultiLayer_BTreeLSTM(
-            in_dim=self.embed_dim + self.hidden_dim + self.obj_dim,
+            in_dim=self.embed_dim + self.hidden_dim + self.obj_dim+ self.language_obj_dim,
             out_dim=self.hidden_dim,
             num_layer=self.nl_edge,
             dropout=self.dropout_rate if self.nl_edge > 1 else 0, )
@@ -167,9 +170,9 @@ class VCTreeLSTMContext(nn.Module):
 
         if self.effect_analysis:
             self.register_buffer("untreated_dcd_feat",
-                                 torch.zeros(self.hidden_dim + self.obj_dim + self.embed_dim + 128))
-            self.register_buffer("untreated_obj_feat", torch.zeros(self.obj_dim + self.embed_dim + 128))
-            self.register_buffer("untreated_edg_feat", torch.zeros(self.embed_dim + self.obj_dim))
+                                 torch.zeros(self.hidden_dim + self.obj_dim + self.embed_dim + 128+ self.language_obj_dim))
+            self.register_buffer("untreated_obj_feat", torch.zeros(self.obj_dim + self.embed_dim + 128+ self.language_obj_dim))
+            self.register_buffer("untreated_edg_feat", torch.zeros(self.embed_dim + self.obj_dim+ self.language_obj_dim))
 
     def obj_ctx(self, num_objs, obj_feats, proposals, obj_labels=None, vc_forest=None, ctx_average=False):
         """

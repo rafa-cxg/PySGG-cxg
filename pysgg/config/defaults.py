@@ -103,7 +103,7 @@ _C.DATALOADER.SIZE_DIVISIBILITY = 0
 # is compatible. This groups portrait images together, and landscape images
 # are not batched with portrait images.
 _C.DATALOADER.ASPECT_RATIO_GROUPING = True
-_C.MODEL.TRAIN_FIRST_STAGE_ONLY = True
+_C.MODEL.TRAIN_FIRST_STAGE_ONLY = False
 # ---------------------------------------------------------------------------- #
 # Backbone options
 # ---------------------------------------------------------------------------- #
@@ -284,18 +284,19 @@ _C.MODEL.ROI_KEYPOINT_HEAD.NUM_CLASSES = 17
 _C.MODEL.ROI_KEYPOINT_HEAD.SHARE_BOX_FEATURE_EXTRACTOR = True
 
 _C.MODEL.TWO_STAGE_HEAD = CN()
-_C.MODEL.TWO_STAGE_HEAD.PURE_SENMENTIC=False
-_C.MODEL.TWO_STAGE_HEAD.USE_GLOVE=False
-_C.MODEL.TWO_STAGE_HEAD.UNION_BOX=True
+_C.MODEL.TWO_STAGE_HEAD.PURE_SENMENTIC=True
+_C.MODEL.TWO_STAGE_HEAD.USE_GLOVE=True
+_C.MODEL.TWO_STAGE_HEAD.UNION_BOX=False
 _C.MODEL.TWO_STAGE_HEAD.INDIVIDUAL_BOX=False
-_C.MODEL.TWO_STAGE_HEAD.transformer_pos=True
-_C.MODEL.TWO_STAGE_HEAD.HIDDEN_DIM=4096
-_C.MODEL.TWO_STAGE_HEAD.PREDICTOR='?'
-_C.MODEL.TWO_STAGE_HEAD.NUM_REL_GROUP= 3
-_C.MODEL.TWO_STAGE_HEAD.BATCH_SIZE_PER_IMAGE=20
+_C.MODEL.TWO_STAGE_HEAD.transformer_pos=False
+_C.MODEL.TWO_STAGE_HEAD.HIDDEN_DIM=1024
+_C.MODEL.TWO_STAGE_HEAD.PREDICTOR='TwoStagePredictor'
+_C.MODEL.TWO_STAGE_HEAD.NUM_REL_GROUP= 50
+_C.MODEL.TWO_STAGE_HEAD.BATCH_SIZE_PER_IMAGE=1000
 _C.MODEL.TWO_STAGE_HEAD.POSITIVE_FRACTION=1
-_C.MODEL.TWO_STAGE_HEAD.loss_distribution=False
-_C.MODEL.TWO_STAGE_HEAD.LOSS_TYPE='kl_loss'
+_C.MODEL.TWO_STAGE_HEAD.USE_TWOSTAGE_LOSS=True
+_C.MODEL.TWO_STAGE_HEAD.loss_distribution=True
+_C.MODEL.TWO_STAGE_HEAD.LOSS_TYPE='cos_loss'
 
 _C.MODEL.ROI_RELATION_HEAD = CN()
 _C.MODEL.ROI_RELATION_HEAD.use_possibility_merger=False
@@ -758,7 +759,7 @@ _C.SOLVER.GRAD_NORM_CLIP = 5.0
 _C.SOLVER.PRINT_GRAD_FREQ = 5000
 # whether validate and validate period
 _C.SOLVER.TO_VAL = True
-_C.SOLVER.PRE_VAL = True
+_C.SOLVER.PRE_VAL = False
 _C.SOLVER.VAL_PERIOD = 2500
 _C.SOLVER.VAL_2STAGE = False
 
@@ -820,6 +821,8 @@ _C.TEST.RELATION.LATER_NMS_PREDICTION_THRES = 0.3
 _C.TEST.RELATION.SYNC_GATHER = True
 
 _C.TEST.ALLOW_LOAD_FROM_CACHE = False
+_C.TEST.CUSTUM_EVAL = False
+_C.TEST.CUSTUM_PATH = '.'
 # ---------------------------------------------------------------------------- #
 # Misc options
 # ---------------------------------------------------------------------------- #

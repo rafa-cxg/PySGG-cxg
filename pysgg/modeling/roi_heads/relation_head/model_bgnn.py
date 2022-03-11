@@ -1025,6 +1025,64 @@ class BGNNContext(nn.Module):
             relatedness_each_iters,#训练时为none,测试时候为拼接值
         )
 
+class bgnn_causal_Context(nn.Module):
+    def __init__(
+        self,
+        cfg,
+        in_channels,
+    ):
+        super(bgnn_causal_Context, self).__init__()
+        self.cfg = cfg
+        self.context=BGNNContext(cfg, in_channels)
+        self.average_ratio = 0.0005
+        self.effect_analysis = cfg.MODEL.ROI_RELATION_HEAD.CAUSAL.EFFECT_ANALYSIS
+        self.obj_dim = in_channels
+        self.embed_dim = self.cfg.MODEL.ROI_RELATION_HEAD.EMBED_DIM
+        self.hidden_dim = self.cfg.MODEL.ROI_RELATION_HEAD.CONTEXT_HIDDEN_DIM
+        if self.effect_analysis:
+            self.register_buffer("untreated_obj_feat", torch.zeros(self.obj_dim))
+            self.register_buffer("untreated_edg_feat", torch.zeros(self.obj_dim))
+    def set_pretrain_pre_clser_mode(self, val=True):
+        self.context.pretrain_pre_clser_mode = val
+
+    def moving_average(self, holder, input):
+        assert len(input.shape) == 2
+        with torch.no_grad():
+            holder = holder * (1 - self.average_ratio) + self.average_ratio * input.mean(0).view(-1)
+        return holder
+    def forward(self,
+                roi_features,
+                union_features,
+                inst_proposals,
+                rel_pair_idxs,
+                rel_binarys=None,
+                logger=None,
+                ctx_average=False
+                ):
+        #用于unbias的，why?
+        batch_size = roi_features.shape[0]
+        rel_batch_size =union_features.shape[0]
+        if (not self.training) and self.effect_analysis and ctx_average:
+            roi_input = self.untreated_obj_feat.view(1, -1).expand(batch_size, -1)
+            uni_input = self.untreated_edg_feat.view(1, -1).expand(rel_batch_size, -1)
+
+        else:
+            roi_input=roi_features
+            uni_input=union_features
+        obj_ctx, edge_ctx, _, relatedness=self.context(roi_input, uni_input, inst_proposals, rel_pair_idxs, rel_binarys, logger)
+        if self.training and self.effect_analysis:
+            self.untreated_obj_feat = self.moving_average(self.untreated_obj_feat, roi_features)
+            self.untreated_edg_feat = self.moving_average(self.untreated_edg_feat, union_features)
+        if relatedness is not None:#说明是非train
+            for idx, prop in enumerate(inst_proposals):
+                prop.add_field("relness_mat", relatedness[idx])#relatedness[idx]:torch.Size([num_prop, num_prop, num_iter])
+        obj_pred_logits =  torch.cat(
+            [each_prop.get_field("predict_logits") for each_prop in inst_proposals], dim=0
+        )
+        obj_pred_labels = torch.cat(
+                    [each_prop.get_field("pred_labels") for each_prop in inst_proposals], dim=0#todo 看来无论何种mode，都是采用不加background的label,为什么？因为预测object是faster rcnn的任务，已经完成，默认它输出的都是对的（起码不是背景）
+                )
+        return obj_pred_logits,obj_pred_labels,obj_ctx,None
 
 def build_bgnn_model(cfg, in_channels):
     return BGNNContext(cfg, in_channels)

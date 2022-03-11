@@ -29,7 +29,7 @@ from .model_msg_passing import IMPContext
 from .model_transformer import TransformerContext
 from .model_vctree import VCTreeLSTMContext
 from .model_vtranse import VTransEFeature
-from .model_bgnn import BGNNContext
+from .model_bgnn import BGNNContext,bgnn_causal_Context
 from .model_agcn import GRCNN
 from .rel_proposal_network.models import (
     make_relation_confidence_aware_module,
@@ -619,6 +619,8 @@ class BGNNPredictor(nn.Module):
         if not cfg.MODEL.TWO_STAGE_HEAD:
             a=1
         rel_cls_logits = self.rel_classifier(rel_feats)
+        # rel_cls_logits[:,0]=0
+        # rel_cls_logits[:,1:] = F.softmax((self.rel_classifier(rel_feats))[:,1:])#cxg不知道有效不
 
         num_objs = [len(b) for b in inst_proposals]
         num_rels = [r.shape[0] for r in rel_pair_idxs]
@@ -917,7 +919,7 @@ class AGRCNNPredictor(nn.Module):
             obj_labels = cat(
                 [proposal.get_field("labels") for proposal in inst_proposals], dim=0
             )
-            refined_obj_logits = to_onehot(obj_labels, self.num_obj)
+            refined_obj_logits = to_onehot(obj_labels, self.num_obj_cls)
         else:
             refined_obj_logits = self.obj_classifier(obj_feats)
 
@@ -1110,9 +1112,9 @@ class MotifPredictor(nn.Module):
         # pairs union
         if self.use_vision:
             if self.union_single_not_match:
-                prod_rep = prod_rep + self.up_dim(union_features)# cxg:我把这里改成+了
+                prod_rep = prod_rep * self.up_dim(union_features)# cxg:我把这里改成+了#todo 这里的union feature到底是vision还是language!
             else:
-                prod_rep = prod_rep + union_features
+                prod_rep = prod_rep * union_features
 
         rel_dists = self.rel_compress(prod_rep)
 
@@ -2448,6 +2450,7 @@ class CausalAnalysisPredictor(nn.Module):
         self.fusion_type = config.MODEL.ROI_RELATION_HEAD.CAUSAL.FUSION_TYPE
         self.separate_spatial = config.MODEL.ROI_RELATION_HEAD.CAUSAL.SEPARATE_SPATIAL
         self.use_vtranse = config.MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER == "vtranse"
+        self.use_bgnn = config.MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER == "bgnn"
         self.effect_type = config.MODEL.ROI_RELATION_HEAD.CAUSAL.EFFECT_TYPE
 
         assert in_channels is not None
@@ -2467,6 +2470,9 @@ class CausalAnalysisPredictor(nn.Module):
             )
         elif config.MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER == "vtranse":
             self.context_layer = VTransEFeature(config, obj_classes, rel_classes, in_channels)
+        elif config.MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER == "bgnn":
+            self.context_layer = bgnn_causal_Context(config, in_channels)
+
         else:
             print("ERROR: Invalid Context Layer")
             assert False
@@ -2482,6 +2488,21 @@ class CausalAnalysisPredictor(nn.Module):
             self.ctx_compress = build_classifier(
                 self.pooling_dim, self.num_rel_cls, bias=False
             )
+            self.vis_compress = build_classifier(self.pooling_dim, self.num_rel_cls)
+        if self.use_bgnn:#这里可以加东西
+            self.edge_dim = self.pooling_dim
+            self.post_emb = nn.Linear(1024, self.pooling_dim*2)
+            self.ctx_compress = build_classifier(self.pooling_dim, self.num_rel_cls)
+            self.vis_compress = build_classifier(4096, self.num_rel_cls)
+            self.post_cat = nn.Sequential(
+                *[
+                    nn.Linear(self.pooling_dim*2, self.pooling_dim),
+                    nn.ReLU(inplace=True),
+                ]
+            )
+            layer_init(self.post_cat[0], xavier=True)
+
+
         else:
             self.edge_dim = self.hidden_dim
             self.post_emb = nn.Linear(self.hidden_dim, self.hidden_dim * 2)
@@ -2493,7 +2514,7 @@ class CausalAnalysisPredictor(nn.Module):
             )
             layer_init(self.post_cat[0], xavier=True)
             self.ctx_compress = build_classifier(self.pooling_dim, self.num_rel_cls)
-        self.vis_compress = build_classifier(self.pooling_dim, self.num_rel_cls)
+            self.vis_compress = build_classifier(self.pooling_dim, self.num_rel_cls)
 
         if self.fusion_type == "gate":
             self.ctx_gate_fc = build_classifier(self.pooling_dim, self.num_rel_cls)
@@ -2503,7 +2524,7 @@ class CausalAnalysisPredictor(nn.Module):
         layer_init(self.post_emb, 10.0 * (1.0 / self.hidden_dim) ** 0.5, normal=True)
         self.init_classifier_weight()
 
-        assert self.pooling_dim == config.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM
+        # assert self.pooling_dim == config.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM commit by cxg
 
         # convey statistics into FrequencyBias to avoid loading again
         self.freq_bias = FrequencyBias(config, statistics)
@@ -2530,7 +2551,11 @@ class CausalAnalysisPredictor(nn.Module):
         self.register_buffer("untreated_spt", torch.zeros(32))
         self.register_buffer("untreated_conv_spt", torch.zeros(self.pooling_dim))
         self.register_buffer("avg_post_ctx", torch.zeros(self.pooling_dim))
-        self.register_buffer("untreated_feat", torch.zeros(self.pooling_dim))
+        if self.use_bgnn:
+            self.register_buffer("untreated_feat", torch.zeros(4096))
+        else:
+            self.register_buffer("untreated_feat", torch.zeros(self.pooling_dim))
+
 
     def init_classifier_weight(self):
 
@@ -2542,15 +2567,21 @@ class CausalAnalysisPredictor(nn.Module):
         elif cfg.MODEL.ROI_RELATION_HEAD.CLASSIFIER in ["weighted_norm", "cosine_similarity"]:
             self.vis_compress.reset_parameters()
             self.ctx_compress.reset_parameters()
+    def start_preclser_relpn_pretrain(self):
+        self.context_layer.set_pretrain_pre_clser_mode()
 
+    def end_preclser_relpn_pretrain(self):
+        self.context_layer.set_pretrain_pre_clser_mode(False)
     def pair_feature_generate(
         self,
         roi_features,
+        union_features,
         proposals,
         rel_pair_idxs,
         num_objs,
         obj_boxs,
-        logger,
+        rel_binarys=None,#专门给bgnn的
+        logger=None,
         ctx_average=False,
     ):
         """
@@ -2565,15 +2596,23 @@ class CausalAnalysisPredictor(nn.Module):
         :return:
         """
         # encode context infomation
-        obj_dists, obj_preds, edge_ctx, binary_preds = self.context_layer(
-            roi_features, proposals, rel_pair_idxs, logger, ctx_average=ctx_average
-        )
-        obj_dist_prob = F.softmax(obj_dists, dim=-1)
 
+        if self.cfg.MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER=='bgnn':
+            obj_dists, obj_preds, edge_ctx, binary_preds = self.context_layer(
+                roi_features,union_features, proposals, rel_pair_idxs,rel_binarys,logger=logger, ctx_average=ctx_average
+            )
+        else:
+            obj_dists, obj_preds, edge_ctx, binary_preds = self.context_layer(
+                roi_features, proposals, rel_pair_idxs, logger, ctx_average=ctx_average
+            )
+        obj_dist_prob = F.softmax(obj_dists, dim=-1)
         # post decode
-        edge_rep = self.post_emb(
+        edge_rep = self.post_emb(  # 这里的edge_rep,类似motif,任然是对应obj数量的特征，而不是relation数目的
             edge_ctx
-        )  # divide to head and tail representation of relationships
+        )
+
+        # if self.cfg.MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER != 'bgnn':
+        # divide to head and tail representation of relationships
         edge_rep = edge_rep.view(edge_rep.size(0), 2, self.edge_dim)
         head_rep = edge_rep[:, 0].contiguous().view(-1, self.edge_dim)
         tail_rep = edge_rep[:, 1].contiguous().view(-1, self.edge_dim)
@@ -2613,7 +2652,32 @@ class CausalAnalysisPredictor(nn.Module):
             post_ctx_rep = ctx_rep
         else:
             post_ctx_rep = self.post_cat(ctx_rep)
+        # else: #如果我是想用bgnn context传回来的edge做，就用这个，但由于原始的unbias中edge_ctx实际上是obj_ctx,vision_ctx是union_feas,unbias是为motif这种输入是单个obj的特征得到edge特征的模型，这种模型只有在predictor中，简单的加上union_feature，没有特征传递过程
 
+            # post_ctx_rep=edge_rep
+            # obj_preds = obj_preds.split(num_objs, dim=0)
+            # obj_prob_list = obj_dist_prob.split(num_objs, dim=0)
+            # obj_dist_list = obj_dists.split(num_objs, dim=0)
+            # pair_preds = []
+            # pair_obj_probs = []
+            # pair_bboxs_info = []
+            # for pair_idx, obj_pred, obj_box, obj_prob in zip(
+            #     rel_pair_idxs, obj_preds, obj_boxs, obj_prob_list
+            # ):
+            #
+            #     pair_preds.append(
+            #         torch.stack((obj_pred[pair_idx[:, 0]], obj_pred[pair_idx[:, 1]]), dim=1)
+            #     )
+            #     pair_obj_probs.append(
+            #         torch.stack((obj_prob[pair_idx[:, 0]], obj_prob[pair_idx[:, 1]]), dim=2)
+            #     )
+            #     pair_bboxs_info.append(
+            #         get_box_pair_info(obj_box[pair_idx[:, 0]], obj_box[pair_idx[:, 1]])
+            #     )
+            # pair_obj_probs = cat(pair_obj_probs, dim=0)
+            # pair_bbox_geo_feat = cat(pair_bboxs_info, dim=0)
+            # pair_pred = cat(pair_preds, dim=0)
+            # edge_rep = None  # 因为之后unbias并没有使用
         return (
             post_ctx_rep,
             pair_pred,
@@ -2667,7 +2731,7 @@ class CausalAnalysisPredictor(nn.Module):
             edge_rep,
             obj_dist_list,
         ) = self.pair_feature_generate(
-            roi_features, proposals, rel_pair_idxs, num_objs, obj_boxs, logger
+            roi_features,union_features, proposals, rel_pair_idxs, num_objs, obj_boxs,rel_binarys, logger
         )
 
         # generate the avg blank features for causalities comparison
@@ -2684,6 +2748,7 @@ class CausalAnalysisPredictor(nn.Module):
                     _,
                 ) = self.pair_feature_generate(
                     roi_features,
+                    union_features,
                     proposals,
                     rel_pair_idxs,
                     num_objs,
@@ -2719,7 +2784,7 @@ class CausalAnalysisPredictor(nn.Module):
 
             # branch constraint: make sure each branch can predict independently
             # todo: but why?
-            if self.auxiliary_loss_on:
+            if self.auxiliary_loss_on:#ctx_compress和vis_compress在calculate_logits中分别算出分类结果并且相加
                 obj_ctx_rel_logits = self.ctx_compress(post_ctx_rep)
                 add_losses["auxiliary_ctx"] = F.cross_entropy(
                     obj_ctx_rel_logits[rel_labels != -1], rel_labels[rel_labels != -1]

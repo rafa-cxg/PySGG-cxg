@@ -7,14 +7,14 @@ from pysgg.config import cfg
 from demo.predictor import COCODemo
 
 import time
-from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
+# from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
 
 
 def main():
     parser = argparse.ArgumentParser(description="PyTorch Object Detection Webcam Demo")
     parser.add_argument(
         "--config-file",
-        default="../configs/caffe2/e2e_mask_rcnn_R_50_FPN_1x_caffe2.yaml",
+        default="/home/rafa/PySGG-cxg/configs/author_predcls.yaml",
         metavar="FILE",
         help="path to config file",
     )
@@ -65,7 +65,7 @@ def main():
         masks_per_dim=args.masks_per_dim,
         min_image_size=args.min_image_size,
     )
-    ffmpeg_extract_subclip('checkpoints/predcls-BGNNPredictor/cxg2/inference/Los.mp4', 45, 50, targetname="test.mp4")
+    # ffmpeg_extract_subclip('Los.mp4', 45, 50, targetname="test.mp4")
     cam = cv2.VideoCapture('test.mp4')
     fourcc = cv2.VideoWriter_fourcc(*'MP4V')
     out = cv2.VideoWriter('output_witnrelation.mp4', fourcc, 20.0, (int(cam.get(3)), int(cam.get(4))))

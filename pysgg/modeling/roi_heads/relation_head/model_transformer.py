@@ -213,7 +213,7 @@ class TransformerContext(nn.Module):
 
         self.dropout_rate = self.cfg.MODEL.ROI_RELATION_HEAD.TRANSFORMER.DROPOUT_RATE   
         self.obj_layer = self.cfg.MODEL.ROI_RELATION_HEAD.TRANSFORMER.OBJ_LAYER      
-        self.edge_layer = self.cfg.MODEL.ROI_RELATION_HEAD.TRANSFORMER #2
+        self.edge_layer = self.cfg.MODEL.ROI_RELATION_HEAD.TRANSFORMER.REL_LAYER #2
         self.num_head = self.cfg.MODEL.ROI_RELATION_HEAD.TRANSFORMER.NUM_HEAD         
         self.inner_dim = self.cfg.MODEL.ROI_RELATION_HEAD.TRANSFORMER.INNER_DIM     
         self.k_dim = self.cfg.MODEL.ROI_RELATION_HEAD.TRANSFORMER.KEY_DIM         
@@ -227,14 +227,17 @@ class TransformerContext(nn.Module):
         with torch.no_grad():
             self.obj_embed1.weight.copy_(embed_vecs, non_blocking=True)
             self.obj_embed2.weight.copy_(embed_vecs, non_blocking=True)
-
+        if self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ:
+            self.language_obj_dim = 512
+        else:
+            self.language_obj_dim = 0
         # position embedding
         self.bbox_embed = nn.Sequential(*[
             nn.Linear(9, 32), nn.ReLU(inplace=True), nn.Dropout(0.1),
             nn.Linear(32, 128), nn.ReLU(inplace=True), nn.Dropout(0.1),
         ])
-        self.lin_obj = nn.Linear(self.in_channels + self.embed_dim + 128, self.hidden_dim)
-        self.lin_edge = nn.Linear(self.embed_dim + self.hidden_dim + self.in_channels, self.hidden_dim)
+        self.lin_obj = nn.Linear(self.in_channels + self.embed_dim + 128+self.language_obj_dim, self.hidden_dim)
+        self.lin_edge = nn.Linear(self.embed_dim + self.hidden_dim + self.in_channels+self.language_obj_dim, self.hidden_dim)
         self.out_obj = nn.Linear(self.hidden_dim, self.num_obj_cls)
         self.context_obj = TransformerEncoder(self.obj_layer, self.num_head, self.k_dim,
                                                 self.v_dim, self.hidden_dim, self.inner_dim, self.dropout_rate)
@@ -249,7 +252,7 @@ class TransformerContext(nn.Module):
 
         # label/logits embedding will be used as input
         if self.cfg.MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL:
-            obj_embed = self.obj_embed1(obj_labels)
+            obj_embed = self.obj_embed1(obj_labels.long())
         else:
             obj_logits = cat([proposal.get_field("predict_logits") for proposal in proposals], dim=0).detach()
             obj_embed = F.softmax(obj_logits, dim=1) @ self.obj_embed1.weight
@@ -268,7 +271,7 @@ class TransformerContext(nn.Module):
         if self.mode == 'predcls':
             obj_preds = obj_labels
             obj_dists = to_onehot(obj_preds, self.num_obj_cls)
-            edge_pre_rep = cat((roi_features, obj_feats, self.obj_embed2(obj_labels)), dim=-1)#图像特征||obj transformer|| word embedding
+            edge_pre_rep = cat((roi_features, obj_feats, self.obj_embed2(obj_labels.long())), dim=-1)#图像特征||obj transformer|| word embedding
         else:
             obj_dists = self.out_obj(obj_feats)
             use_decoder_nms = self.mode == 'sgdet' and not self.training

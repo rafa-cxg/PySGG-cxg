@@ -169,6 +169,9 @@ class DatasetCatalog(object):
             args['filter_non_overlap'] = (not cfg.MODEL.ROI_RELATION_HEAD.USE_GT_BOX) and cfg.MODEL.RELATION_ON and cfg.MODEL.ROI_RELATION_HEAD.REQUIRE_BOX_OVERLAP
             args['filter_empty_rels'] = True
             args['flip_aug'] = cfg.MODEL.FLIP_AUG
+            args['custom_eval'] = cfg.TEST.CUSTUM_EVAL
+            args['custom_path'] = cfg.TEST.CUSTUM_PATH
+
             return dict(
                 factory="VGDataset",
                 args=args,

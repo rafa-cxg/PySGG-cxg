@@ -85,7 +85,7 @@ def norm_distribution(prob, num=150,dim=1):
     prob_weight = prob_weight / np.repeat(sum_value, prob_weight.shape[dim], axis=dim)
     prob_weight[0,:]=0#避免nan
     return prob_weight
-def plot_distribution_bar(rel_array,data,object=False): #input should be an np array
+def plot_distribution_bar(rel_array,data,is_sub,object=False): #input should be an np array
     stastic_photo_dir='clustering/stastic_photo_dir/'
     CHECK_FOLDER = os.path.isdir(stastic_photo_dir)
     if not CHECK_FOLDER:
@@ -99,17 +99,25 @@ def plot_distribution_bar(rel_array,data,object=False): #input should be an np a
 
         objects = (rel_array[predicates,:])#(151)
         xs = np.arange(len(objects))
-        fig = plt.figure(figsize=(10, 5))
+        fig = plt.figure(figsize=(10, 5),dpi=200)
         plt.bar(xs, objects, color='maroon',width=0.4)
         # plt.xticks(xs, labels)  # Replace default x-ticks with xs, then replace xs with labels
         # plt.yticks(ys)
         if object==False:#代表统计的是predicate
             label = data.ind_to_predicates[predicates]
         else:
-            label = data.ind_to_classes[predicates]
+            if is_sub:
+                label = data.ind_to_classes[predicates] + '(sub)'
+            else:
+                label = data.ind_to_classes[predicates]+ '(obj)'
 
-        plt.xlabel(label)
-        plt.show()
+        # plt.xlabel(label)
+        plt.title(label)
+        plt.ylabel('ratio')
+        #获得所有x坐标标签
+        xlabels= [data.ind_to_predicates[i] for i in np.arange(rel_array.shape[1])]
+        plt.xticks(xs, xlabels, rotation=45, ha='right', rotation_mode='anchor',fontsize=6)
+        # plt.show()
         plt.savefig(stastic_photo_dir+str(label)+'.png')
 
 
@@ -144,7 +152,6 @@ def get_dataset_statistics(cfg):
 
     data_statistics_name = ''.join(dataset_names) + '_statistics'
     save_file = os.path.join(cfg.OUTPUT_DIR, "{}.cache".format(data_statistics_name))
-
     if os.path.exists(save_file):
         logger.info('Loading data statistics from: ' + str(save_file))
         logger.info('-' * 100)
@@ -198,7 +205,7 @@ def multi_process_stastics(train_idx,train_data,rel_obj_distribution,sub_rel_dis
     return  rel_obj_distribution,sub_rel_distribution,obj_rel_distribution,pred_counter
 
 #by cxg
-def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=False,clustering=True):
+def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=False,clustering=False):
     """save relation frequency distribution after the sampling etc processing
     the data distribution that model will be trained on it
 
@@ -243,15 +250,15 @@ def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=Fa
             '''转换成np array'''
             rel_obj_distribution = rel_obj_distribution.numpy()
             # rel_obj_distribution = np.array(rel_obj_distribution)  # (51,151)
-            plot_distribution_bar(rel_obj_distribution,train_data)
+            # plot_distribution_bar(rel_obj_distribution,train_data)
         '''sub'''
         with open(os.path.join(cfg.OUTPUT_DIR, "record_sub_distribution.pkl"), 'wb') as f:
             pickle.dump(sub_rel_distribution, f)
-        plot_distribution_bar(sub_rel_distribution, train_data,object=True)
+        plot_distribution_bar(sub_rel_distribution, train_data,is_sub=True,object=True)
         '''obj'''
         with open(os.path.join(cfg.OUTPUT_DIR, "record_obj_distribution.pkl"), 'wb') as f:
             pickle.dump(obj_rel_distribution, f)
-        plot_distribution_bar(obj_rel_distribution, train_data, object=True)
+        plot_distribution_bar(obj_rel_distribution, train_data, is_sub=False,object=True)
 
         if clustering:
             # rel_obj_distribution_norm=norm_distribution(rel_obj_distribution[1:,1:])
@@ -553,6 +560,19 @@ def make_data_loader(cfg, mode='train', is_distributed=False, start_iter=0,for_c
             collate_fn=collator,
             pin_memory=False
         )
+        # the dataset information used for scene graph detection on customized images
+        if cfg.TEST.CUSTUM_EVAL:
+            custom_data_info = {}
+            custom_data_info['idx_to_files'] = dataset.custom_files
+            custom_data_info['ind_to_classes'] = dataset.ind_to_classes
+            custom_data_info['ind_to_predicates'] = dataset.ind_to_predicates
+
+            if not os.path.exists(cfg.DETECTED_SGG_DIR):
+                os.makedirs(cfg.DETECTED_SGG_DIR)
+
+            with open(os.path.join(cfg.DETECTED_SGG_DIR, 'custom_data_info.json'), 'w') as outfile:
+                json.dump(custom_data_info, outfile)
+            print('=====> ' + str(os.path.join(cfg.DETECTED_SGG_DIR, 'custom_data_info.json')) + ' SAVED !')
         data_loaders.append(data_loader)
     if is_train:
         # during training, a single (possibly concatenated) data_loader is returned

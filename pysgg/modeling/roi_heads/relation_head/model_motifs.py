@@ -35,7 +35,7 @@ class FrequencyBias(nn.Module):
         :param labels: [batch_size, 2] 
         :return: 
         """
-        return self.obj_baseline(labels[:, 0] * self.num_objs + labels[:, 1])
+        return self.obj_baseline(labels.long()[:, 0] * self.num_objs + labels.long()[:, 1])
 
     def index_with_probability(self, pair_prob):
         """
@@ -233,6 +233,9 @@ class LSTMContext(nn.Module):
         self.obj_classes = obj_classes
         self.rel_classes = rel_classes
         self.num_obj_classes = len(obj_classes)
+        if self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ:
+            self.language_obj_dim=512
+        else: self.language_obj_dim=0
 
         # mode
         if self.cfg.MODEL.ROI_RELATION_HEAD.USE_GT_BOX:
@@ -267,25 +270,21 @@ class LSTMContext(nn.Module):
         assert self.nl_obj > 0 and self.nl_edge > 0
 
 
-        if self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ:
-            self.language_edge_dim=512
-        else: self.language_edge_dim=0
-
 
         # TODO Kaihua Tang
         # AlternatingHighwayLSTM is invalid for pytorch 1.0
         self.obj_ctx_rnn = torch.nn.LSTM(
-            input_size=self.obj_dim + self.embed_dim + 128+self.language_edge_dim,
+            input_size=self.obj_dim + self.embed_dim + 128+self.language_obj_dim,
             hidden_size=self.hidden_dim,
             num_layers=self.nl_obj,
             dropout=self.dropout_rate if self.nl_obj > 1 else 0,
             bidirectional=True)
         self.decoder_rnn = DecoderRNN(self.cfg, self.obj_classes, embed_dim=self.embed_dim,
-                                      inputs_dim=self.hidden_dim + self.obj_dim + self.embed_dim + 128+self.language_edge_dim,
+                                      inputs_dim=self.hidden_dim + self.obj_dim + self.embed_dim + 128+self.language_obj_dim,
                                       hidden_dim=self.hidden_dim,
                                       rnn_drop=self.dropout_rate)
         self.edge_ctx_rnn = torch.nn.LSTM(
-            input_size=self.embed_dim + self.hidden_dim + self.obj_dim+self.language_edge_dim,
+            input_size=self.embed_dim + self.hidden_dim + self.obj_dim+self.language_obj_dim,
             hidden_size=self.hidden_dim,
             num_layers=self.nl_edge,
             dropout=self.dropout_rate if self.nl_edge > 1 else 0,
@@ -300,9 +299,9 @@ class LSTMContext(nn.Module):
 
         if self.effect_analysis:
             self.register_buffer("untreated_dcd_feat",
-                                 torch.zeros(self.hidden_dim + self.obj_dim + self.embed_dim + 128+self.language_edge_dim))
-            self.register_buffer("untreated_obj_feat", torch.zeros(self.obj_dim + self.embed_dim + 128+self.language_edge_dim))
-            self.register_buffer("untreated_edg_feat", torch.zeros(self.embed_dim + self.obj_dim+self.language_edge_dim))
+                                 torch.zeros(self.hidden_dim + self.obj_dim + self.embed_dim + 128))
+            self.register_buffer("untreated_obj_feat", torch.zeros(self.obj_dim + self.embed_dim + 128+self.language_obj_dim))
+            self.register_buffer("untreated_edg_feat", torch.zeros(self.embed_dim + self.obj_dim))
 
     def sort_rois(self, proposals):
         c_x = center_x(proposals)
@@ -324,7 +323,7 @@ class LSTMContext(nn.Module):
         # Sort by the confidence of the maximum detection.
         perm, inv_perm, ls_transposed = self.sort_rois(proposals)
         # Pass object features, sorted by score, into the encoder LSTM
-        obj_inp_rep = obj_feats[perm].contiguous()
+        obj_inp_rep = obj_feats[perm].contiguous()#inp 指的是input,输入的带顺序的序列
         input_packed = PackedSequence(obj_inp_rep, ls_transposed)
         encoder_rep = self.obj_ctx_rnn(input_packed)[0][0]
         encoder_rep = self.lin_obj_h(encoder_rep)  # map to hidden_dim
@@ -410,7 +409,12 @@ class LSTMContext(nn.Module):
                                                                                     ctx_average=ctx_average)
         # edge level contextual feature
         # RNN message passing on initial object features and object features fuse with the context information
+        # if self.cfg.MODEL.ROI_RELATION_HEAD.use_possibility_merger:
+        #     obj_embed2 = self.obj_embed2(obj_preds.long())
+        # else:
         obj_embed2 = self.obj_embed2(obj_preds.long())
+        # obj_embed2 = F.softmax(obj_dists, dim=1) @ self.obj_embed2.weight
+
 
         if (all_average or ctx_average) and self.effect_analysis and (not self.training):
             obj_rel_rep = cat((self.untreated_edg_feat.view(1, -1).expand(batch_size, -1), obj_ctx), dim=-1)#untreated_edg_feat前面进行了初始化为0

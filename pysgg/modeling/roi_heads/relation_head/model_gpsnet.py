@@ -214,6 +214,9 @@ class GPSNetContext(nn.Module):
         self.update_step = num_iter
         self.pooling_dim = self.cfg.MODEL.ROI_RELATION_HEAD.CONTEXT_POOLING_DIM
         self.num_rel_cls = self.cfg.MODEL.ROI_RELATION_HEAD.NUM_CLASSES
+        self.filter_the_mp_instance=cfg.MODEL.ROI_RELATION_HEAD.GPSNET_MODULE.MP_ON_VALID_PAIRS
+        self.relness_weighting_mp=cfg.MODEL.ROI_RELATION_HEAD.GPSNET_MODULE.RELNESS_MP_WEIGHTING
+
 
         if self.update_step < 1:
             print(

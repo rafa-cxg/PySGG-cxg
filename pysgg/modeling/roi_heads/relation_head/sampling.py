@@ -39,11 +39,14 @@ class RelationSampling(object):
                 cand_matrix = cand_matrix.byte() & boxlist_iou(p, p).gt(0).byte()
             idxs = torch.nonzero(cand_matrix).view(-1, 2)
             if len(idxs) > self.max_proposal_pairs:#判断最多relation配对数目和max大小比较
-                pairs_qualities = p.get_field("pred_scores")
-                pairs_qualities = pairs_qualities[idxs[:, 0]] * pairs_qualities[idxs[:, 1]]
-                select_idx = torch.sort(pairs_qualities, descending=True)[-1][: self.max_proposal_pairs]
-                idxs = idxs[select_idx]
-
+                try:
+                    pairs_qualities = p.get_field("pred_scores")
+                    pairs_qualities = pairs_qualities[idxs[:, 0]] * pairs_qualities[idxs[:, 1]]
+                    select_idx = torch.sort(pairs_qualities, descending=True)[-1][: self.max_proposal_pairs]
+                    idxs = idxs[select_idx]
+                except:
+                    select_idx=torch.randint(0,len(idxs) ,(self.max_proposal_pairs,))
+                    idxs = idxs[select_idx]
             if len(idxs) > 0:
                 rel_pair_idxs.append(idxs)
             else:
