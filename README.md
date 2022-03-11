@@ -96,9 +96,7 @@ MODEL.ROI_RELATION_HEAD.CAUSAL.AUXILIARY_LOSS True \
 MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER bgnn #or motifs \
 MODEL.ROI_RELATION_HEAD.CAUSAL.EFFECT_ANALYSIS true \
 MODEL.ROI_RELATION_HEAD.CAUSAL.EFFECT_TYPE TDE \
-```
-We also provide the trained model pth of [BGNN(vg)](https://shanghaitecheducn-my.sharepoint.com/:u:/g/personal/lirj2_shanghaitech_edu_cn/Ee4PdxluTphEicUDckJIfmEBisAyUgkjeuerN_rjrG1CIw?e=pgr8a5) 
-
+``` 
 
 
 ## Test
@@ -131,4 +129,4 @@ If you find this project helps your research, please kindly consider citing our 
 
 
 ## Acknowledgment
-This repository is developed on top of the scene graph benchmarking framwork develped by [KaihuaTang](https://github.com/KaihuaTang/Scene-Graph-Benchmark.pytorch)
+This repository is developed on top of the scene graph benchmark Toolkit [PySGG](https://github.com/SHTUPLUS/PySGG)
