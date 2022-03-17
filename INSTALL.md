@@ -1,6 +1,6 @@
 ## Installation
 
-Most of the requirements of this projects are exactly the same as [maskrcnn-benchmark](https://github.com/facebookresearch/maskrcnn-benchmark). If you have any problem of your environment, you should check their [issues page](https://github.com/facebookresearch/maskrcnn-benchmark/issues) first. Hope you will find the answer.
+
 
 ### Requirements:
 - PyTorch >= 1.4
@@ -48,9 +48,6 @@ python setup.py install --cuda_ext --cpp_ext
 
 # install PyTorch Detection
 cd $INSTALL_DIR
-git clone https://github.com/KaihuaTang/Scene-Graph-Benchmark.pytorch.git
-cd pysgg
-
 # the following will install the lib with
 # symbolic links, so that you can modify
 # the files if you want and won't need to

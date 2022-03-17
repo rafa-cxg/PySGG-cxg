@@ -296,6 +296,6 @@ class make_visual_language_merger_edge(nn.Module):
                 languageembedding.append(op)
                 del language_matrixs; del op
             languageembedding=torch.cat(languageembedding,0)#[N_PAIRS,1,200,200]
-            mixed=visual_feature*languageembedding
+            mixed=visual_feature+languageembedding
             return mixed
 
