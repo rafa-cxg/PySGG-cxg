@@ -534,7 +534,7 @@ def load_graphs(roidb_file, split, num_im, num_val_im, filter_empty_rels, filter
                     (box_ind_1, box_ind_2, predicate) relationships
     """
     roi_h5 = h5py.File(roidb_file, 'r')
-    data_split = roi_h5['split'][:]
+    data_split = roi_h5['split'][:]#区分test和train的划分
     split_flag = 2 if split == 'test' else 0
     split_mask = data_split == split_flag
 

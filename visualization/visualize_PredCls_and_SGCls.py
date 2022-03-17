@@ -98,7 +98,7 @@ def print_list(name, input_list):
         print(name + ' ' + str(i) + ': ' + str(item))
 
 
-def draw_image(img_path, boxes ,labels, gt_rels, pred_rels, pred_rel_score, pred_rel_label,idx, print_img=True):
+def draw_image(img_path, boxes ,labels, gt_rels, pred_rels, pred_rel_score, pred_rel_label,idx, print_relation=True):
     draw_all_gt_box=False
     pic = Image.open(img_path)
 
@@ -114,9 +114,11 @@ def draw_image(img_path, boxes ,labels, gt_rels, pred_rels, pred_rel_score, pred
         #gt box idx that is related to gt relation
         gt_box_relative=list(set([int(list(i)[0].split('-')[0]) for i in gt_rels]+[int(list(i)[2].split('-')[0]) for i in gt_rels]))
         num_obj = boxes.shape[0]
-        for i in gt_box_relative:
-            info = labels[i]
-            draw_single_box(pic, boxes[i],  draw_info=info)
+        if print_relation:
+            for i in gt_box_relative:
+                info = labels[i]
+                draw_single_box(pic, boxes[i],  draw_info=info)
+        else: pass
     if only_display_box==False:
 
         # for i in range(len(pred_rels)):
@@ -132,18 +134,20 @@ def draw_image(img_path, boxes ,labels, gt_rels, pred_rels, pred_rel_score, pred
             sub_idx = int(sub.split('-')[0])
             obj_idx=int(obj.split('-')[0])
             draw_single_box(pic, boxes[sub_idx],boxes[obj_idx], gt_rels[i],color='black')
-    if print_img:
-        # display(pic)
-        pic.show()
-        pic.save(save_img_path+'{}.png'.format(idx))
-        pic.close()
-        # plt.imshow(pic)
-    if print_img:
-        print('*' * 50)
-        print_list('gt_boxes', labels)
-        print('*' * 50)
-        print_list('gt_rels', gt_rels)
-        print('*' * 50)
+
+    # display(pic)
+    pic.show()
+    if os.path.isdir(detected_origin_path) and os.path.exists(save_img_path)==False:
+        os.mkdir(save_img_path)
+    pic.save(save_img_path+'{}.png'.format(idx))
+    pic.close()
+    # plt.imshow(pic)
+
+    print('*' * 50)
+    print_list('gt_boxes', labels)
+    print('*' * 50)
+    print_list('gt_rels', gt_rels)
+    print('*' * 50)
     print_list('pred_rels', pred_rels[:20])
     print('*' * 50)
 
@@ -163,14 +167,17 @@ def show_all(start_idx, length,args):
             draw_image(*get_info_by_idx(cand_idx, detected_origin_result),cand_idx)
         if args.draw_pred_box:
             draw_pred_box(cand_idx, detected_origin_result)
+        else:
+            draw_image(*get_info_by_idx(cand_idx, detected_origin_result), cand_idx,print_relation=False)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyTorch Relation Detection Training")
     parser.add_argument('--detected_origin_path', type=str)
     parser.add_argument('--start_idx', type=int,default=0)
-    parser.add_argument('--end_idx', type=int, default=50)
+    parser.add_argument('--end_idx', type=int, default=100)
     parser.add_argument('--draw_pred_box', type=bool, default=False)
-    parser.add_argument('--draw_gt_box', type=bool, default=True)
+    parser.add_argument('--draw_gt_box', type=bool, default=False)
 
     args = parser.parse_args()
     # load detected results

@@ -89,4 +89,12 @@ def load_state_dict(model, loaded_state_dict, load_mapping):
     align_and_update_state_dicts(model_state_dict, loaded_state_dict, load_mapping)
 
     # use strict loading
-    model.load_state_dict(model_state_dict, strict=False)
+    try:
+        model.load_state_dict(model_state_dict, strict=False)
+    except(RuntimeError):#从baseline checkpoint 转换到训练congitive bias
+        print('remove baseline layers mismatch')
+        for k in list(model_state_dict.keys()):
+            if k.startswith('roi_heads.relation.predictor.context_layer.pairwise_feature_extractor'):
+                del model_state_dict[k]
+
+        model.load_state_dict(model_state_dict, strict=False)

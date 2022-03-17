@@ -83,7 +83,7 @@ MODEL:
       SEPARATE_SPATIAL: False         # separate spatial in union feature
       CONTEXT_LAYER: "motifs"         # candicates: motifs, vctree, vtranse
       SPATIAL_FOR_VISION: True
-      EFFECT_ANALYSIS: True
+      EFFECT_ANALYSIS: False #True
     ############### Parameters for Transformer Predictor ##############
     TRANSFORMER:
       DROPOUT_RATE: 0.1
@@ -107,7 +107,7 @@ SOLVER:
   MOMENTUM: 0.9
   GRAD_NORM_CLIP: 5.0
   STEPS: (10000, 16000)
-  MAX_ITER: 40000
+  MAX_ITER: 80000
   VAL_PERIOD: 2000
   CHECKPOINT_PERIOD: 2000
   PRINT_GRAD_FREQ: 4000
@@ -117,8 +117,8 @@ SOLVER:
     PATIENCE: 6
     THRESHOLD: 0.001
     COOLDOWN: 0
-    FACTOR: 0.1
-    MAX_DECAY_STEP: 3
+    FACTOR: 0.8
+    MAX_DECAY_STEP: 16
 OUTPUT_DIR: './output/relation_baseline'
 TEST:
   ALLOW_LOAD_FROM_CACHE: False

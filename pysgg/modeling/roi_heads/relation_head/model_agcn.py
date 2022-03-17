@@ -24,7 +24,9 @@ class GRCNN(nn.Module):
         num_classes_obj = cfg.MODEL.ROI_BOX_HEAD.NUM_CLASSES
         num_classes_pred = cfg.MODEL.ROI_RELATION_HEAD.NUM_CLASSES
         # self.obj_feature_extractor = make_roi_relation_box_feature_extractor(cfg, in_channels)
-
+        if self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ:
+            self.language_obj_dim=512
+        else: self.language_obj_dim=0
         self.vail_pair_num = cfg.MODEL.ROI_RELATION_HEAD.GRCNN_MODULE.MP_VALID_PAIRS_NUM
 
         self.filter_the_mp_instance = cfg.MODEL.ROI_RELATION_HEAD.GRCNN_MODULE.MP_ON_VALID_PAIRS
