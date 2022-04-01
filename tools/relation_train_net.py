@@ -433,10 +433,9 @@ def train(
 
 
         losses = sum(loss for loss in loss_dict.values())
-        # losses =  loss_dict['loss_rel'] + 10 * loss_dict['loss_two_stage']
-        if cfg.MODEL.ROI_RELATION_HEAD.PREDICTOR=='MotifPredictor' and cfg.MODEL.ROI_RELATION_HEAD.OBJECT_CLASSIFICATION_REFINE:
-            losses = 2 * loss_dict['loss_rel'] + 2 * loss_dict['loss_two_stage'] + sum(
-                loss for loss in loss_dict.values())
+        # if cfg.MODEL.ROI_RELATION_HEAD.PREDICTOR=='MotifPredictor' and cfg.MODEL.ROI_RELATION_HEAD.OBJECT_CLASSIFICATION_REFINE:
+        #     losses = 2 * loss_dict['loss_rel'] + 2 * loss_dict['loss_two_stage'] + sum(
+        #         loss for loss in loss_dict.values())
 
         # if cfg.MODEL.TWO_STAGE_ON: #只有使用2stage时候才考虑loss为0的问题
         #     if losses==0 or ('loss_two_stage' not in loss_dict.keys()):
