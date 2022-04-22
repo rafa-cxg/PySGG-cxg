@@ -4,6 +4,7 @@ import os
 import pickle
 
 import numpy as np
+import pylab as p
 import torch
 from matplotlib import pyplot as plt
 from pycocotools.coco import COCO
@@ -14,8 +15,14 @@ from pysgg.data.datasets.evaluation.coco.coco_eval import COCOResults
 from pysgg.data.datasets.evaluation.vg.sgg_eval import SGRecall, SGNoGraphConstraintRecall, \
     SGZeroShotRecall, SGPairAccuracy, SGMeanRecall, SGStagewiseRecall, SGNGMeanRecall
 from pysgg.data.datasets.visual_genome import HEAD, TAIL, BODY
+
+from functools import partial
+import  torch.multiprocessing
+import copy
+torch.multiprocessing.set_sharing_strategy('file_system')
 import torch.nn.functional as F
 eval_times = 0
+MAX_PROCESS=2
 
 
 def do_vg_evaluation(
@@ -26,6 +33,7 @@ def do_vg_evaluation(
         logger,
         iou_types,
 ):
+    # pool = torch.multiprocessing.Pool(processes=MAX_PROCESS)
     cluster_dir='clustering/'
     # get zeroshot triplet
     zeroshot_triplet = torch.load("pysgg/data/datasets/evaluation/vg/zeroshot_triplet.pytorch",
@@ -250,9 +258,48 @@ def do_vg_evaluation(
         global_container['num_attributes'] = num_attributes
 
         logger.info("evaluating relationship predictions..")
+        # split_predictions = torch.chunk(torch.arange(0, len(predictions), dtype=torch.int), MAX_PROCESS, -1)
+        # num=0
+        # p=[]
+        # g=[]
+        # for i in split_predictions:
+        #     p.append((predictions[num:num+i.shape[0]]))
+        #     g.append((groundtruths[num:num + i.shape[0]]))
+        #     num += i.shape[0]
+        # # del groundtruths,predictions
+        #
+        # f1 = pool.starmap(
+        #     partial(evaluate_relation_of_mages, global_container=global_container, evaluator=evaluator,cfg=cfg),
+        #    zip(g,p))
+        #
+        # pool.close()
+        # pool.join()
+        #
+        # #
+        # #************************ only for multi processing*********************
+        # #注意，所有继承eval类的recall，其result_dict是属于同一个父类的self.result_dict,所以只需要随意修改一个指标中的
+        # # result 就会自动更新所有的recall中的result_dict
+        # for f in f1:
+        #     for key1 in f:
+        #         if key1 == 'eval_stagewise_recall':
+        #            evaluator[key1].relation_per_cls_hit_recall=f[key1].relation_per_cls_hit_recall
+        #            for l,_ in zip(evaluator[key1].per_img_rel_cls_recall,f[key1].per_img_rel_cls_recall):
+        #                for k,v in l.items():
+        #                    v.extend(_[k])
+        #     for key2,value2 in f['eval_recall'].result_dict.items():
+        #         if isinstance(value2, list):
+        #             (evaluator['eval_recall'].result_dict)[key2].extend(value2)
+        #         else:
+        #             for key3, value3 in value2.items():
+        #                 if isinstance((evaluator['eval_recall'].result_dict)[key2][key3], float):
+        #                     pass# 说明这里是merecall
+        #                 else:
+        #                     (evaluator['eval_recall'].result_dict)[key2][key3].extend(value3)
+
+        #****************************************************#
+
         for groundtruth, prediction in tqdm(zip(groundtruths, predictions), total=len(predictions)):#'relation_tuple':[sub_id\obj_id\rel]
             evaluate_relation_of_one_image(groundtruth, prediction, global_container, evaluator,cfg)#local_container再此创建。该函数中，evaluater存储的各类metric函数库，实际计算结果都在每个函数的self.result_dict里面，已append list方式
-
         # calculate mean recall
         eval_mean_recall.calculate_mean_recall(mode)#上步仅仅collect recall item(每幅图),evaluater元素包括eval_mean_recall
         eval_ng_mean_recall.calculate_mean_recall(mode)
@@ -521,8 +568,130 @@ def evaluate_relation_of_one_image(groundtruth, prediction, global_container, ev
                               pred_boxlist=prediction.convert('xyxy').to("cpu"),
                               pred_rel_pair_idx=prediction.get_field('rel_pair_idxs').long().detach().cpu(),
                               pred_rel_scores=prediction.get_field('pred_rel_scores').detach().cpu())
-    return
+    return evaluator
 
+
+def evaluate_relation_of_mages(groundtruths, predictions, global_container, evaluator,cfg):
+    """
+    Returns:
+        pred_to_gt: Matching from predicate to GT
+        pred_5ples: the predicted (id0, id1, cls0, cls1, rel)
+        pred_triplet_scores: [cls_0score, relscore, cls1_score]
+    """
+    '''multi process version of evaluate_relation_of_one_image'''
+    # unpack all inputs
+    mode = global_container['mode']
+    local_container = {}
+    for groundtruth, prediction in tqdm(zip(groundtruths, predictions), total=len(predictions)):
+        local_container['gt_rels'] = groundtruth.get_field('relation_tuple').long().detach().cpu().numpy()#[23，3]
+
+        # if there is no gt relations for current image, then skip it
+        if len(local_container['gt_rels']) == 0:
+            return
+
+        local_container['gt_boxes'] = groundtruth.convert('xyxy').bbox.detach().cpu().numpy()  # (#gt_objs, 4)
+        local_container['gt_classes'] = groundtruth.get_field('labels').long().detach().cpu().numpy()  # (#gt_objs, )
+        '''获得1stage的gt标签'''
+        # local_container['gt_2stage'] = prediction.get_field('pred_2stage_labels').long().detach().cpu().numpy()
+        # about relations
+        local_container['pred_rel_inds'] = prediction.get_field(
+            'rel_pair_idxs').long().detach().cpu().numpy()  # sgdet:(#pred_rels, 2) eg(4096,2) .predcls:[num_box!,2]
+        local_container['rel_scores'] = prediction.get_field(
+            'pred_rel_scores').detach().cpu().numpy()  # (#pred_rels, num_pred_class)
+        if cfg.MODEL.TWO_STAGE_ON:
+            local_container['gt_2stage'] = groundtruth.get_field('2stage_tuple').long().detach().cpu().numpy()  # [23，3]
+            local_container['pred_2stage_rel_inds'] = prediction.get_field(
+                'rel_2stage_pair_idx').long().detach().cpu().numpy()
+            local_container['2stage_rel_scores'] = prediction.get_field(
+                'two_stage_pred_rel_prob').detach().cpu().numpy()
+            # local_container['two_stage_pred_rel_prob']= prediction.get_field('two_stage_pred_rel_prob').detach().cpu().numpy()
+            local_container['pred_2stage_labels'] = prediction.get_field('pred_2stage_labels').detach().cpu().numpy()
+        # about objects
+        local_container['pred_boxes'] = prediction.convert('xyxy').bbox.detach().cpu().numpy()  # (#pred_objs, 4) ifpredcls:数值和gt_boxes一样
+        local_container['pred_classes'] = prediction.get_field(
+            'pred_labels').long().detach().cpu().numpy()  # (#pred_objs, )
+        local_container['obj_scores'] = prediction.get_field('pred_scores').detach().cpu().numpy()  # (#pred_objs, )
+
+        # to calculate accuracy, only consider those gt pairs
+        # This metric is used by "Graphical Contrastive Losses for Scene Graph Parsing"
+        # for sgcls and predcls
+        if mode != 'sgdet':
+            if evaluator.get("eval_pair_accuracy") is not None:
+                evaluator['eval_pair_accuracy'].prepare_gtpair(local_container)#存储预测的rel对（仅仅考虑sub obj编号）是否与gt pair一致
+
+        # to calculate the prior label based on statistics
+        if evaluator.get("eval_zeroshot_recall") is not None:
+            evaluator['eval_zeroshot_recall'].prepare_zeroshot(global_container, local_container)
+
+        if mode == 'predcls':
+            local_container['pred_boxes'] = local_container['gt_boxes']
+            local_container['pred_classes'] = local_container['gt_classes']
+            local_container['obj_scores'] = np.ones(local_container['gt_classes'].shape[0])
+
+        elif mode == 'sgcls':
+            if local_container['gt_boxes'].shape[0] != local_container['pred_boxes'].shape[0]:
+                print('Num of GT boxes is not matching with num of pred boxes in SGCLS')
+        elif mode == 'sgdet' or mode == 'phrdet':
+            pass
+        else:
+            raise ValueError('invalid mode')
+        """
+        elif mode == 'preddet':
+            # Only extract the indices that appear in GT
+            prc = intersect_2d(pred_rel_inds, gt_rels[:, :2])
+            if prc.size == 0:
+                for k in result_dict[mode + '_recall']:
+                    result_dict[mode + '_recall'][k].append(0.0)
+                return None, None, None
+            pred_inds_per_gt = prc.argmax(0)
+            pred_rel_inds = pred_rel_inds[pred_inds_per_gt]
+            rel_scores = rel_scores[pred_inds_per_gt]
+    
+            # Now sort the matching ones
+            rel_scores_sorted = argsort_desc(rel_scores[:,1:])
+            rel_scores_sorted[:,1] += 1
+            rel_scores_sorted = np.column_stack((pred_rel_inds[rel_scores_sorted[:,0]], rel_scores_sorted[:,1]))
+    
+            matches = intersect_2d(rel_scores_sorted, gt_rels)
+            for k in result_dict[mode + '_recall']:
+                rec_i = float(matches[:k].any(0).sum()) / float(gt_rels.shape[0])
+                result_dict[mode + '_recall'][k].append(rec_i)
+            return None, None, None
+        """
+
+        if local_container['pred_rel_inds'].shape[0] == 0:
+            return
+
+        # Traditional Metric with Graph Constraint
+        # NOTE: this is the MAIN evaluation function, it must be run first (several important variables need to be update)
+        #calculate_recall 分母是gt_rel数目，分子是topk预测中hit gt_rel的数目（去重：多个pred_triblet对应一个gt时候算一个）
+        local_container = evaluator['eval_recall'].calculate_recall(global_container, local_container, mode)#'pred_rel_inds'[4096,2]
+
+        # No Graph Constraint
+        if evaluator.get("eval_nog_recall") is not None:
+            evaluator['eval_nog_recall'].calculate_recall(global_container, local_container, mode)
+        # GT Pair Accuracy
+        if evaluator.get("eval_pair_accuracy") is not None:
+            evaluator['eval_pair_accuracy'].calculate_recall(global_container, local_container, mode)
+        # Mean Recall
+        if evaluator.get("eval_mean_recall") is not None:
+            evaluator['eval_mean_recall'].collect_mean_recall_items(global_container, local_container, mode)
+
+        if evaluator.get("eval_ng_mean_recall") is not None:
+            evaluator['eval_ng_mean_recall'].collect_mean_recall_items(global_container, local_container, mode)
+        # Zero shot Recall
+        if evaluator.get("eval_zeroshot_recall") is not None:
+            evaluator['eval_zeroshot_recall'].calculate_recall(global_container, local_container, mode)
+        # stage wise recall
+        if evaluator.get("eval_stagewise_recall") is not None:
+            evaluator['eval_stagewise_recall'] \
+                .calculate_recall(mode, global_container,
+                                  gt_boxlist=groundtruth.convert('xyxy').to("cpu"),
+                                  gt_relations=groundtruth.get_field('relation_tuple').long().detach().cpu(),
+                                  pred_boxlist=prediction.convert('xyxy').to("cpu"),
+                                  pred_rel_pair_idx=prediction.get_field('rel_pair_idxs').long().detach().cpu(),
+                                  pred_rel_scores=prediction.get_field('pred_rel_scores').detach().cpu())
+    return evaluator
 
 def convert_relation_matrix_to_triplets(relation):
     triplets = []

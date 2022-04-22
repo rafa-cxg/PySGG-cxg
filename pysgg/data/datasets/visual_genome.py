@@ -20,6 +20,7 @@ from pysgg.utils.comm import get_rank, synchronize
 
 from pysgg.data.datasets.bi_lvl_rsmp import resampling_dict_generation, apply_resampling
 
+from SHA_GCL_extra.group_chosen_function import predicate_new_order, predicate_new_order_name
 BOX_SCALE = 1024  # Scale at which we have the boxes
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
@@ -88,7 +89,8 @@ class VGDataset(torch.utils.data.Dataset):
 
         self.ind_to_classes, self.ind_to_predicates, self.ind_to_attributes = load_info(
             dict_file)  # contiguous 151, 51 containing __background__
-
+        if cfg.GLOBAL_SETTING.USE_GCL:
+            self.ind_to_predicates = predicate_new_order_name
         logger = logging.getLogger("pysgg.dataset")
         self.logger = logger
 
@@ -132,7 +134,9 @@ class VGDataset(torch.utils.data.Dataset):
             if get_rank() == 0:
                 repeat_dict = resampling_dict_generation(self, self.ind_to_predicates, logger)
                 self.repeat_dict = repeat_dict
-                with open(os.path.join(cfg.OUTPUT_DIR, "repeat_dict.pkl"), "wb") as f:
+                if os.path.isdir(cfg.OUTPUT_DIR)==False:
+                    os.makedirs(cfg.OUTPUT_DIR)
+                with open(os.path.join(cfg.OUTPUT_DIR, "repeat_dict.pkl"), "wb") as f:#todo 如果是eval模式，就不要计算repeat_dict
                     pickle.dump(self.repeat_dict, f)
 
             synchronize()
@@ -595,6 +599,11 @@ def load_graphs(roidb_file, split, num_im, num_val_im, filter_empty_rels, filter
 
         if i_rel_start >= 0:
             predicates = _relation_predicates[i_rel_start: i_rel_end + 1]
+            # we rearrange the order of the label, from the predicate who owns maximum training samples to the fewer
+            new_pre_list = []
+            for pre_raw in predicates:
+                new_pre_list.append(predicate_new_order[pre_raw])
+            predicates = new_pre_list
             obj_idx = _relations[i_rel_start: i_rel_end
                                  + 1] - i_obj_start  # range is [0, num_box)
             assert np.all(obj_idx >= 0)

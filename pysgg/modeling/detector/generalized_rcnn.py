@@ -46,7 +46,7 @@ class GeneralizedRCNN(nn.Module):
         """
         if self.training and targets is None:
             raise ValueError("In training mode, targets should be passed")
-        images = to_image_list(images)
+        images  = to_image_list(images)
         features = self.backbone(images.tensors)#进入resnet.py，resnet class forward中，返回5-list是返回的resnet5个layer的结果.images.tensors:torch.Size([12, 3, 1024, 608]) 怎么做到尺寸一致的？
         proposals, proposal_losses = self.rpn(images, features, targets)#targets:box_list.proposals:仅有objectness
         if self.roi_heads:

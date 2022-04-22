@@ -8,6 +8,8 @@ from pysgg.modeling.backbone import resnet
 from pysgg.modeling.make_layers import group_norm
 from pysgg.modeling.make_layers import make_fc
 from pysgg.modeling.poolers import Pooler
+from pysgg.data.datasets.visual_genome import load_info
+from pysgg.utils.imports import import_file
 from ..relation_head.utils_motifs import obj_edge_vectors
 from pysgg.layers import (
     BatchNorm2d,
@@ -136,7 +138,8 @@ class FPN2MLPFeatureExtractor(nn.Module):
         return x
 
     def forward_without_pool(self, x):#给union feature用的
-        x = x.view(x.size(0), -1)
+        b=x.size(0)
+        x = x.reshape(b, -1)
         x = F.relu(self.fc6(x))
         x = F.relu(self.fc7(x))
         return x
@@ -215,12 +218,21 @@ class make_visual_language_merger_obj(nn.Module):
         self.cfg=cfg
         self.latest_fusion=False#在决策层相加
         self.early_fusion = True  #
-        statistics = get_dataset_statistics(cfg)
-        obj_classes, rel_classes = statistics['obj_classes'], statistics['rel_classes']
-        self.num_obj_classes = len(obj_classes)
-        self.num_rel_classes = len(rel_classes)
-        self.obj_classes = obj_classes
-        self.rel_classes = rel_classes
+        # statistics = get_dataset_statistics(cfg)
+        # obj_classes, rel_classes = statistics['obj_classes'], statistics['rel_classes']
+        paths_catalog = import_file(
+            "pysgg.config.paths_catalog", cfg.PATHS_CATALOG, True
+        )
+        dataset_names = cfg.DATASETS.TRAIN
+        DatasetCatalog = paths_catalog.DatasetCatalog
+        for dataset_name in dataset_names:
+            data = DatasetCatalog.get(dataset_name, cfg)
+            dict_file = data['args']['dict_file']
+        self.obj_classes, self.rel_classes, self.ind_to_attributes = load_info(
+            dict_file)
+
+        self.num_obj_classes = len(self.obj_classes)
+        self.num_rel_classes = len(self.rel_classes)
         #transformer参数
 
         self.embed_dim = self.cfg.MODEL.ROI_RELATION_HEAD.EMBED_DIM
@@ -297,8 +309,6 @@ class make_visual_language_merger_obj(nn.Module):
         num_objs = [len(p) for p in proposals]
         obj_feats = self.lin_obj(obj_feats)
         obj_feats=self.context_obj(obj_feats, num_objs)  # TransformerEncoder
-
-
         mixed=torch.cat((visual_feature,obj_feats),1)
         return  mixed
 

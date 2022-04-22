@@ -96,5 +96,7 @@ def load_state_dict(model, loaded_state_dict, load_mapping):
         for k in list(model_state_dict.keys()):
             if k.startswith('roi_heads.relation.predictor.context_layer.pairwise_feature_extractor'):
                 del model_state_dict[k]
+            if k.startswith('roi_heads.relation.predictor.context_layer'):# shapredictor
+                del model_state_dict[k]
 
         model.load_state_dict(model_state_dict, strict=False)

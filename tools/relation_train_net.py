@@ -290,7 +290,7 @@ def train(
 
     save_to_disk = get_rank() == 0
     checkpointer = DetectronCheckpointer(
-        cfg, model, optimizer, scheduler, output_dir, save_to_disk, custom_scheduler=True
+        cfg, model, optimizer, scheduler, output_dir, save_to_disk, custom_scheduler=False
     )
     # todo, unless mark as resume, otherwise load from the pretrained checkpoint
     arguments = {}
@@ -390,10 +390,10 @@ def train(
             recall_highest_setting = 0.29  # 暂时
         else:
             mode = "sgcls"
-            recall_highest_setting = 0.10#0.15
+            recall_highest_setting = 0.08#0.15
     else:
         mode = "sgdet"
-        recall_highest_setting = 0.04#0.1715  # 暂时
+        recall_highest_setting = 0.05#0.1715  # 暂时
 
     if cfg.USE_CLUSTER==True:
         if os.path.isfile(cfg.OUTPUT_DIR+'/cluster_on_dataset.pkl')==False:#存放数据集Instance的feature文件
@@ -412,7 +412,8 @@ def train(
             deepcluster = clustering.__dict__['Kmeans'](3)
         # clustering_loss = deepcluster.faiss_cluster(feature.to('cpu').numpy())
             clustering_loss = deepcluster.sklearn_cluster(feature.to('cpu').numpy())
-
+    # scalar = torch.nn.Parameter(torch.FloatTensor(1)).cuda()  # 用于balance EEM的loss权值
+    # torch.nn.init.uniform_(scalar, 0.5)
     for iteration, (images, targets, _) in (enumerate(train_data_loader, start_iter)):
         # torch.cuda.empty_cache()
         if any(len(target) < 1 for target in targets):
@@ -422,21 +423,24 @@ def train(
         data_time = time.time() - end
         iteration = iteration + 1
         arguments["iteration"] = iteration
-
         model.train()
         fix_eval_modules(eval_modules)
-
         images = images.to(device)
         targets = [target.to(device) for target in targets]
-
         loss_dict = model(images, targets, logger=logger) #predcls:dict:4
+        synchronize()
+        #
+        # for key,loss in  loss_dict.items():
+        #     if key=='loss_rel':
+        #         loss_dict['loss_rel']=(1-scalar.squeeze())*loss_dict['loss_rel']
+        #     if key=='loss_two_stage':
+        #         loss_dict['loss_two_stage']=scalar.squeeze()*loss_dict['loss_two_stage']
 
-
-        losses = sum(loss for loss in loss_dict.values())
-        # if cfg.MODEL.ROI_RELATION_HEAD.PREDICTOR=='MotifPredictor' and cfg.MODEL.ROI_RELATION_HEAD.OBJECT_CLASSIFICATION_REFINE:
-        #     losses = 2 * loss_dict['loss_rel'] + 2 * loss_dict['loss_two_stage'] + sum(
-        #         loss for loss in loss_dict.values())
-
+        if  cfg.MODEL.ROI_RELATION_HEAD.REL_OBJ_MULTI_TASK_LOSS:
+            losses =  sum(
+                loss for loss in loss_dict.values())-0.5*loss_dict['loss_refine_obj']
+        else:
+            losses = sum(loss for loss in loss_dict.values())
         # if cfg.MODEL.TWO_STAGE_ON: #只有使用2stage时候才考虑loss为0的问题
         #     if losses==0 or ('loss_two_stage' not in loss_dict.keys()):
         #         print('counter nan: pass this iter\n')
@@ -534,6 +538,7 @@ def train(
                         "eta: {eta}\n",
                         "iter: {iter}/{max_iter}\n",
                         "{meters}",
+                        # "{loss_scalar}\n"
                         "lr: {lr:.6f}\n",
                         "max mem: {memory:.0f}\n",
                     ]
@@ -544,6 +549,7 @@ def train(
                     iter=iteration,
                     meters=str(meters),
                     lr=optimizer.param_groups[0]["lr"],
+                    # loss_scalar=scalar.item(),
                     max_iter=max_iter,
                     memory=torch.cuda.max_memory_allocated() / 1024.0 / 1024.0,
                 )
@@ -554,7 +560,7 @@ def train(
         arguments["scheduler"] = scheduler
 
         val_result_value = None  # used for scheduler updating
-        if cfg.SOLVER.TO_VAL and iteration % cfg.SOLVER.VAL_PERIOD == 0:
+        if cfg.SOLVER.TO_VAL and iteration % cfg.SOLVER.VAL_PERIOD == 0:#==0: #
             logger.info("Start validating")
             val_result = run_val(cfg, model, val_data_loaders, distributed, logger)#->inference->vg_evaluation->evaluate_relation_of_one_image->calculate_recall
             val_result_value = val_result[1]
@@ -712,7 +718,7 @@ def run_test(cfg, model, distributed, logger):
 
 def main():
 
-    torch.multiprocessing.set_start_method('forkserver')
+    # torch.multiprocessing.set_start_method('forkserver')
     parser = argparse.ArgumentParser(description="PyTorch Relation Detection Training")
     parser.add_argument(
         "--config-file",

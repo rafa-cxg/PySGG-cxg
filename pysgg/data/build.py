@@ -268,12 +268,6 @@ def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=Fa
             predicate2cluster,predicatename2cluster = map_predicate2cluster(train_data, kmedoids.labels_)
             a=1
 
-
-
-
-
-
-
         from pysgg.data.datasets.visual_genome import HEAD, TAIL, BODY
         
         head = HEAD

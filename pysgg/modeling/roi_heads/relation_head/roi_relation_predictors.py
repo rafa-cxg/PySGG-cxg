@@ -1,4 +1,6 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+import random
+
 import ipdb
 import torch
 
@@ -39,8 +41,735 @@ from .rel_proposal_network.loss import (
     RelAwareLoss,
 )
 from .utils_relation import layer_init, get_box_info, get_box_pair_info, obj_prediction_nms
+from .RTPB.bias_module import build_bias_module
+from .model_dual_transformer import GTransformerContext,BaseTransformerEncoder
+from .model_cross_transformer import CrossTransformerEncoder
+
+from .model_Hybrid_Attention import SHA_Context
+from .SHA.model_Cross_Attention import CA_Context
+
+from SHA_GCL_extra.kl_divergence import KL_divergence
+from SHA_GCL_extra.utils_funcion import FrequencyBias_GCL
+from SHA_GCL_extra.extra_function_utils import generate_num_stage_vector, generate_sample_rate_vector, \
+    generate_current_sequence_for_bias, get_current_predicate_idx
+from SHA_GCL_extra.group_chosen_function import get_group_splits
+@registry.ROI_RELATION_PREDICTOR.register("TransLike_GCL")
+class TransLike_GCL(nn.Module):
+    def __init__(self, config, in_channels):
+        super(TransLike_GCL, self).__init__()
+        # load parameters
+        self.config = config
+
+        self.num_obj_cls = config.MODEL.ROI_BOX_HEAD.NUM_CLASSES
+        self.num_rel_cls = config.MODEL.ROI_RELATION_HEAD.NUM_CLASSES
+        assert in_channels is not None
+        num_inputs = in_channels
+        self.use_vision = config.MODEL.ROI_RELATION_HEAD.PREDICT_USE_VISION
+        self.use_bias = config.GLOBAL_SETTING.USE_BIAS
+        self.use_EEM = config.MODEL.TWO_STAGE_ON
+        # load class dict
+        statistics = get_dataset_statistics(config)
+        obj_classes, rel_classes = statistics['obj_classes'], statistics['rel_classes']
+        assert self.num_obj_cls == len(obj_classes)
+        assert self.num_rel_cls == len(rel_classes)
+        self.obj_classes = obj_classes
+        self.rel_classes = rel_classes
+        self.in_channels = in_channels
+        # module construct
+        if config.GLOBAL_SETTING.BASIC_ENCODER == 'Self-Attention':
+            self.context_layer = TransformerContext(config, obj_classes, rel_classes, in_channels)
+        elif config.GLOBAL_SETTING.BASIC_ENCODER == 'Cross-Attention':
+            self.context_layer = CA_Context(config, obj_classes, rel_classes, in_channels)
+        elif config.GLOBAL_SETTING.BASIC_ENCODER == 'Hybrid-Attention':
+            self.context_layer = SHA_Context(config, obj_classes, rel_classes, in_channels)
+
+        # post decoding
+        self.hidden_dim = config.MODEL.ROI_RELATION_HEAD.CONTEXT_HIDDEN_DIM
+        self.pooling_dim = config.MODEL.ROI_RELATION_HEAD.CONTEXT_POOLING_DIM
+        self.post_emb = nn.Linear(self.hidden_dim, self.hidden_dim * 2)
+        self.post_cat = nn.Linear(self.hidden_dim * 2, self.pooling_dim)
+
+        # initialize layer parameters
+        layer_init(self.post_emb, 10.0 * (1.0 / self.hidden_dim) ** 0.5, normal=True)
+        layer_init(self.post_cat, xavier=True)
+
+        if self.pooling_dim != config.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM:
+            self.union_single_not_match = True
+            self.up_dim = nn.Linear(config.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM, self.pooling_dim)
+            layer_init(self.up_dim, xavier=True)
+        else:
+            self.union_single_not_match = False
+
+        # get model configs
+        self.Knowledge_Transfer_Mode = config.GLOBAL_SETTING.GCL_SETTING.KNOWLEDGE_TRANSFER_MODE
+        self.no_relation_restrain = config.GLOBAL_SETTING.GCL_SETTING.NO_RELATION_RESTRAIN
+        self.zero_label_padding_mode = config.GLOBAL_SETTING.GCL_SETTING.ZERO_LABEL_PADDING_MODE
+        self.knowledge_loss_coefficient = config.GLOBAL_SETTING.GCL_SETTING.KNOWLEDGE_LOSS_COEFFICIENT
+        # generate the auxiliary lists
+        self.group_split_mode = config.GLOBAL_SETTING.GCL_SETTING.GROUP_SPLIT_MODE
+        num_of_group_element_list, predicate_stage_count = get_group_splits(config.GLOBAL_SETTING.DATASET_CHOICE, self.group_split_mode)#num_of_group_element_list：【list】 分组后的list,编号是降序后的
+        self.max_group_element_number_list = generate_num_stage_vector(num_of_group_element_list)
+        self.incre_idx_list, self.max_elemnt_list, self.group_matrix, self.kd_matrix = get_current_predicate_idx(
+            num_of_group_element_list, 0.1, config.GLOBAL_SETTING.DATASET_CHOICE)
+        self.sample_rate_matrix = generate_sample_rate_vector(config.GLOBAL_SETTING.DATASET_CHOICE, self.max_group_element_number_list)
+        self.bias_for_group_split = generate_current_sequence_for_bias(num_of_group_element_list, config.GLOBAL_SETTING.DATASET_CHOICE)
+
+        self.num_groups = len(self.max_elemnt_list)
+        self.rel_compress_all, self.ctx_compress_all = self.generate_muti_networks(self.num_groups)
+        self.CE_loss = nn.CrossEntropyLoss()
+
+        if self.use_bias:
+            self.freq_bias_all = self.generate_multi_bias(config, statistics, self.num_groups)
+
+        if self.Knowledge_Transfer_Mode != 'None':
+            self.NLL_Loss = nn.NLLLoss()
+            self.pre_group_matrix = torch.tensor(self.group_matrix, dtype=torch.int64).cuda()
+            self.pre_kd_matrix = torch.tensor(self.kd_matrix, dtype=torch.float16).cuda()
+            self.criterion_loss = nn.CrossEntropyLoss()
+
+    def forward(self, proposals, rel_pair_idxs, rel_labels, rel_binarys, roi_features, union_features, logger=None):
+        add_losses = {}
+        obj_dists, obj_preds, edge_ctx = self.context_layer(roi_features, proposals, logger)
+
+        if self.use_EEM:
+            # ----------添加EEM---------------------------#
+            two_stage_logits = [proposal.get_field("two_stage_pred_rel_logits") for proposal in
+                                        proposals]
+            two_stage_logits = torch.cat(two_stage_logits, dim=0)
+
+        # post decode
+        edge_rep = self.post_emb(edge_ctx)
+        edge_rep = edge_rep.view(edge_rep.size(0), 2, self.hidden_dim)
+        head_rep = edge_rep[:, 0].contiguous().view(-1, self.hidden_dim)
+        tail_rep = edge_rep[:, 1].contiguous().view(-1, self.hidden_dim)
+
+        num_rels = [r.shape[0] for r in rel_pair_idxs]
+        num_objs = [len(b) for b in proposals]
+        assert len(num_rels) == len(num_objs)
+
+        head_reps = head_rep.split(num_objs, dim=0)
+        tail_reps = tail_rep.split(num_objs, dim=0)
+        obj_preds = obj_preds.split(num_objs, dim=0)
+
+        # from object level feature to pairwise relation level feature
+        prod_reps = []
+        pair_preds = []
+        for pair_idx, head_rep, tail_rep, obj_pred in zip(rel_pair_idxs, head_reps, tail_reps, obj_preds):
+            prod_reps.append(torch.cat((head_rep[pair_idx[:,0]], tail_rep[pair_idx[:,1]]), dim=-1))
+            pair_preds.append(torch.stack((obj_pred[pair_idx[:,0]], obj_pred[pair_idx[:,1]]), dim=1))
+        prod_rep = cat(prod_reps, dim=0)
+        pair_pred = cat(pair_preds, dim=0)
+
+        ctx_gate = self.post_cat(prod_rep)
+
+        # use union box and mask convolution
+        if self.union_single_not_match:
+            visual_rep = ctx_gate * self.up_dim(union_features)
+        else:
+            visual_rep = ctx_gate * union_features
+
+        if self.training:
+            if not self.config.MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL:
+                fg_labels = cat([proposal.get_field("labels") for proposal in proposals], dim=0)
+                loss_refine_obj = self.criterion_loss(obj_dists, fg_labels.long())
+                add_losses['obj_loss'] = loss_refine_obj
+
+            rel_labels = cat(rel_labels, dim=0)
+            max_label = max(rel_labels)
+
+            num_groups = self.incre_idx_list[max_label.item()]
+            if num_groups == 0:
+                num_groups = max(self.incre_idx_list)
+            cur_chosen_matrix = []
+
+            for i in range(num_groups):
+                cur_chosen_matrix.append([])
+
+            for i in range(len(rel_labels)):
+                rel_tar = rel_labels[i].item()
+                if rel_tar == 0:
+                    if self.zero_label_padding_mode == 'rand_insert':
+                        random_idx = random.randint(0, num_groups - 1)
+                        cur_chosen_matrix[random_idx].append(i)
+                    elif self.zero_label_padding_mode == 'rand_choose' or self.zero_label_padding_mode == 'all_include':
+                        if self.zero_label_padding_mode == 'rand_choose':
+                            rand_zeros = random.random()
+                        else:
+                            rand_zeros = 1.0
+                        if rand_zeros >= 0.4:
+                            for zix in range(len(cur_chosen_matrix)):
+                                cur_chosen_matrix[zix].append(i)
+                else:
+                    rel_idx = self.incre_idx_list[rel_tar]
+                    random_num = random.random()
+                    for j in range(num_groups):
+                        act_idx = num_groups - j
+                        threshold_cur = self.sample_rate_matrix[act_idx - 1][rel_tar]
+                        if random_num <= threshold_cur or act_idx < rel_idx:#小于该标签的group号，或者随机数小于该act_idx的对应阈值的，则所有组都对此序号的数据采样他
+                            # print('%d-%d-%d-%.2f-%.2f'%(i, rel_idx, act_idx, random_num, threshold_cur))
+                            for k in range(act_idx):
+                                cur_chosen_matrix[k].append(i)
+                            break
+
+            for i in range(num_groups):
+                if max_label == 0:#max_label: batch中rel标签最大的
+                    group_visual = visual_rep
+                    group_input = prod_rep
+                    group_label = rel_labels
+                    group_pairs = pair_pred
+                else:
+                    group_visual = visual_rep[cur_chosen_matrix[i]]
+                    group_input = prod_rep[cur_chosen_matrix[i]]
+                    group_label = rel_labels[cur_chosen_matrix[i]]
+                    group_pairs = pair_pred[cur_chosen_matrix[i]]
+
+                '''count Cross Entropy Loss'''
+                jdx = i
+                rel_compress_now = self.rel_compress_all[jdx]
+                ctx_compress_now = self.ctx_compress_all[jdx]
+                group_output_now = rel_compress_now(group_visual) + ctx_compress_now(group_input)
+                if self.use_bias:
+                    rel_bias_now = self.freq_bias_all[jdx]
+                    group_output_now = group_output_now + rel_bias_now.index_with_labels(group_pairs.long())
+                if self.use_EEM :
+                    mask= self.pre_group_matrix[jdx].ge(1)#only perserve valid group categories
+                    mask[0]=True
+                    if max_label!=0:
+                        actual_group_eem_logits=torch.masked_select(two_stage_logits[cur_chosen_matrix[i]], mask).view(group_label.shape[0],-1)
+                    else:
+                        actual_group_eem_logits = torch.masked_select(two_stage_logits,
+                                                                      mask).view(group_label.shape[0], -1)
+                    group_output_now=group_output_now+actual_group_eem_logits
+                # actual_label_piece: if label is out of range, then filter it to ensure the training can continue
+                actual_label_now = self.pre_group_matrix[jdx][group_label]#在当前的group下，采样的label的值
+                add_losses['%d_CE_loss' % (jdx + 1)] = self.CE_loss(group_output_now, actual_label_now)
+
+                if self.Knowledge_Transfer_Mode == 'KL_logit_Neighbor':
+                    if i > 0:
+                        '''count knowledge transfer loss'''
+                        jbef = i - 1
+                        rel_compress_bef = self.rel_compress_all[jbef]#jbef: jbefore
+                        ctx_compress_bef = self.ctx_compress_all[jbef]
+                        group_output_bef = rel_compress_bef(group_visual) + ctx_compress_bef(group_input)
+                        if self.use_bias:
+                            rel_bias_bef = self.freq_bias_all[jbef]
+                            group_output_bef = group_output_bef + rel_bias_bef.index_with_labels(group_pairs.long())
+                        if self.use_EEM:
+                            mask = self.pre_group_matrix[jbef].ge(1)  # only perserve valid group categories
+                            mask[0] = True
+                            if max_label != 0:
+                                actual_group_eem_logits = torch.masked_select(two_stage_logits[cur_chosen_matrix[i]],
+                                                                              mask).view(group_label.shape[0], -1)
+                            else:
+                                actual_group_eem_logits = torch.masked_select(two_stage_logits,
+                                                                              mask).view(group_label.shape[0], -1)
+                            group_output_bef = group_output_bef + actual_group_eem_logits
+                        max_vector = self.max_elemnt_list[jbef] + 1
+
+                        if self.no_relation_restrain:
+                            kd_choice_vector = self.pre_kd_matrix[jbef][group_label]
+                            kd_loss_matrix = KL_divergence(group_output_bef[:, 1:], group_output_now[:, 1:max_vector],
+                                                           reduce=False)
+                            kd_loss_vecify = kd_loss_matrix * kd_choice_vector
+                            kd_loss_final = self.knowledge_loss_coefficient * torch.mean(kd_loss_vecify)
+                        else:
+                            kd_loss_matrix = KL_divergence(group_output_bef[:, 1:], group_output_now[:, 1:max_vector],
+                                                           reduce=True)
+                            kd_loss_final = self.knowledge_loss_coefficient * kd_loss_matrix
+                        add_losses['%d%d_kl_loss' % (jbef + 1, jdx + 1)] = kd_loss_final
+
+                elif self.Knowledge_Transfer_Mode == 'KL_logit_TopDown':
+                    layer_total_loss = 0
+                    for jbef in range(i):
+                        rel_compress_bef = self.rel_compress_all[jbef]
+                        ctx_compress_bef = self.ctx_compress_all[jbef]
+                        group_output_bef = rel_compress_bef(group_visual) + ctx_compress_bef(group_input)
+                        if self.use_bias:
+                            rel_bias_bef = self.freq_bias_all[jbef]
+                            group_output_bef = group_output_bef + rel_bias_bef.index_with_labels(group_pairs.long())
+                        if self.use_EEM:
+                            mask = self.pre_group_matrix[jbef].ge(1)  # only perserve valid group categories
+                            mask[0] = True
+                            if max_label != 0:
+                                actual_group_eem_logits = torch.masked_select(two_stage_logits[cur_chosen_matrix[i]],
+                                                                              mask).view(group_label.shape[0], -1)
+                            else:
+                                actual_group_eem_logits = torch.masked_select(two_stage_logits,
+                                                                              mask).view(group_label.shape[0], -1)
+                            group_output_bef = group_output_bef + actual_group_eem_logits
+                        max_vector = self.max_elemnt_list[jbef] + 1
+
+                        if self.no_relation_restrain:
+                            kd_choice_vector = self.pre_kd_matrix[jbef][group_label]
+                            kd_loss_matrix = KL_divergence(group_output_bef[:, 1:], group_output_now[:, 1:max_vector],
+                                                           reduce=False)
+                            kd_loss_vecify = kd_loss_matrix * kd_choice_vector
+                            kd_loss_final = self.knowledge_loss_coefficient * torch.mean(kd_loss_vecify)
+                        else:
+                            kd_loss_matrix = KL_divergence(group_output_bef[:, 1:], group_output_now[:, 1:max_vector],
+                                                           reduce=True)
+                            kd_loss_final = self.knowledge_loss_coefficient * kd_loss_matrix
+                        layer_total_loss += kd_loss_final
+
+                    if i > 0:
+                        add_losses['%d_DKS_loss' % (jdx + 1)] = layer_total_loss
+
+                elif self.Knowledge_Transfer_Mode == 'KL_logit_BiDirection':
+                    layer_total_loss = 0
+                    for jbef in range(i):
+                        rel_compress_bef = self.rel_compress_all[jbef]
+                        ctx_compress_bef = self.ctx_compress_all[jbef]
+                        group_output_bef = rel_compress_bef(group_visual) + ctx_compress_bef(group_input)
+                        if self.use_bias:
+                            rel_bias_bef = self.freq_bias_all[jbef]
+                            group_output_bef = group_output_bef + rel_bias_bef.index_with_labels(group_pairs.long())
+                        max_vector = self.max_elemnt_list[jbef] + 1
+
+                        if self.no_relation_restrain:
+                            kd_choice_vector = self.pre_kd_matrix[jbef][group_label]
+                            kd_loss_matrix_td = KL_divergence(group_output_bef[:, 1:],
+                                                              group_output_now[:, 1:max_vector],
+                                                              reduce=False)
+                            kd_loss_matrix_bu = KL_divergence(group_output_now[:, 1:max_vector],
+                                                              group_output_bef[:, 1:],
+                                                              reduce=False)
+                            kd_loss_vecify = (kd_loss_matrix_td + kd_loss_matrix_bu) * kd_choice_vector
+                            kd_loss_final = self.knowledge_loss_coefficient * torch.mean(kd_loss_vecify)
+                        else:
+                            kd_loss_matrix_td = KL_divergence(group_output_bef[:, 1:],
+                                                              group_output_now[:, 1:max_vector],
+                                                              reduce=True)
+                            kd_loss_matrix_bu = KL_divergence(group_output_now[:, 1:max_vector],
+                                                              group_output_bef[:, 1:],
+                                                              reduce=True)
+                            kd_loss_final = self.knowledge_loss_coefficient * (kd_loss_matrix_td + kd_loss_matrix_bu)
+                        layer_total_loss += kd_loss_final
+
+                    if i > 0:
+                        add_losses['%d_DKS_loss' % (jdx + 1)] = layer_total_loss
+            # sactter_two_stage_logits = proposal.get_field("two_stage_pred_rel_logits")
+            # relation_logits[idx] = relation_logits[idx] + (sactter_two_stage_logits)
+            return obj_dists, None, add_losses
+        else:
+            rel_compress_test = self.rel_compress_all[-1]#nn.linear 4096->51
+            ctx_compress_test = self.ctx_compress_all[-1]#nn.linear 1024->51
+            rel_dists = rel_compress_test(visual_rep) + ctx_compress_test(prod_rep)
 
 
+            if self.use_bias:
+                rel_bias_test = self.freq_bias_all[-1]
+                rel_dists = rel_dists + rel_bias_test.index_with_labels(pair_pred.long())
+            if self.use_EEM:
+                rel_dists = rel_dists + two_stage_logits
+            rel_dists = rel_dists.split(num_rels, dim=0)
+            obj_dists = obj_dists.split(num_objs, dim=0)
+
+            return obj_dists, rel_dists, add_losses
+
+    def generate_muti_networks(self, num_cls):
+        '''generate all the hier-net in the model, need to set mannually if use new hier-class'''
+        self.rel_classifer_1 = nn.Linear(self.pooling_dim, self.max_group_element_number_list[0] + 1)
+        self.rel_classifer_2 = nn.Linear(self.pooling_dim, self.max_group_element_number_list[1] + 1)
+        self.rel_classifer_3 = nn.Linear(self.pooling_dim, self.max_group_element_number_list[2] + 1)
+        self.rel_classifer_4 = nn.Linear(self.pooling_dim, self.max_group_element_number_list[3] + 1)
+        self.rel_compress_1 = nn.Linear(self.hidden_dim * 2, self.max_group_element_number_list[0] + 1)
+        self.rel_compress_2 = nn.Linear(self.hidden_dim * 2, self.max_group_element_number_list[1] + 1)
+        self.rel_compress_3 = nn.Linear(self.hidden_dim * 2, self.max_group_element_number_list[2] + 1)
+        self.rel_compress_4 = nn.Linear(self.hidden_dim * 2, self.max_group_element_number_list[3] + 1)
+        layer_init(self.rel_classifer_1, xavier=True)
+        layer_init(self.rel_classifer_2, xavier=True)
+        layer_init(self.rel_classifer_3, xavier=True)
+        layer_init(self.rel_classifer_4, xavier=True)
+        layer_init(self.rel_compress_1, xavier=True)
+        layer_init(self.rel_compress_2, xavier=True)
+        layer_init(self.rel_compress_3, xavier=True)
+        layer_init(self.rel_compress_4, xavier=True)
+        if num_cls == 4:
+            classifer_all = [self.rel_classifer_1, self.rel_classifer_2, self.rel_classifer_3, self.rel_classifer_4]
+            compress_all = [self.rel_compress_1, self.rel_compress_2, self.rel_compress_3, self.rel_compress_4]
+        elif num_cls < 4:
+            exit('wrong num in compress_all')
+        else:
+            self.rel_classifer_5 = nn.Linear(self.pooling_dim, self.max_group_element_number_list[4] + 1)
+            layer_init(self.rel_classifer_5, xavier=True)
+            self.rel_compress_5 = nn.Linear(self.hidden_dim * 2, self.max_group_element_number_list[4] + 1)
+            layer_init(self.rel_compress_5, xavier=True)
+            if num_cls == 5:
+                classifer_all = [self.rel_classifer_1, self.rel_classifer_2, self.rel_classifer_3,
+                                 self.rel_classifer_4, self.rel_classifer_5]
+                compress_all = [self.rel_compress_1, self.rel_compress_2, self.rel_compress_3,
+                                self.rel_compress_4, self.rel_compress_5]
+            else:
+                self.rel_classifer_6 = nn.Linear(self.pooling_dim, self.max_group_element_number_list[5] + 1)
+                layer_init(self.rel_classifer_6, xavier=True)
+                self.rel_compress_6 = nn.Linear(self.hidden_dim * 2, self.max_group_element_number_list[5] + 1)
+                layer_init(self.rel_compress_6, xavier=True)
+                if num_cls == 6:
+                    classifer_all = [self.rel_classifer_1, self.rel_classifer_2, self.rel_classifer_3,
+                                     self.rel_classifer_4, self.rel_classifer_5, self.rel_classifer_6]
+                    compress_all = [self.rel_compress_1, self.rel_compress_2, self.rel_compress_3,
+                                    self.rel_compress_4, self.rel_compress_5, self.rel_compress_6]
+                else:
+                    self.rel_classifer_7 = nn.Linear(self.pooling_dim, self.max_group_element_number_list[6] + 1)
+                    layer_init(self.rel_classifer_7, xavier=True)
+                    self.rel_compress_7 = nn.Linear(self.hidden_dim * 2, self.max_group_element_number_list[6] + 1)
+                    layer_init(self.rel_compress_7, xavier=True)
+                    classifer_all = [self.rel_classifer_1, self.rel_classifer_2, self.rel_classifer_3,
+                                     self.rel_classifer_4, self.rel_classifer_5, self.rel_classifer_6,
+                                     self.rel_classifer_7]
+                    compress_all = [self.rel_compress_1, self.rel_compress_2, self.rel_compress_3,
+                                    self.rel_compress_4, self.rel_compress_5, self.rel_compress_6, self.rel_compress_7]
+                    if num_cls > 7:
+                        exit('wrong num in compress_all')
+        return classifer_all, compress_all
+
+    def generate_multi_bias(self, config, statistics, num_cls):
+        self.freq_bias_1 = FrequencyBias_GCL(config, statistics, config.GLOBAL_SETTING.DATASET_CHOICE, predicate_all_list=self.bias_for_group_split[0])
+        self.freq_bias_2 = FrequencyBias_GCL(config, statistics, config.GLOBAL_SETTING.DATASET_CHOICE, predicate_all_list=self.bias_for_group_split[1])
+        self.freq_bias_3 = FrequencyBias_GCL(config, statistics, config.GLOBAL_SETTING.DATASET_CHOICE, predicate_all_list=self.bias_for_group_split[2])
+        self.freq_bias_4 = FrequencyBias_GCL(config, statistics, config.GLOBAL_SETTING.DATASET_CHOICE, predicate_all_list=self.bias_for_group_split[3])
+        if num_cls < 4:
+            exit('wrong num in multi_bias')
+        elif num_cls == 4:
+            freq_bias_all = [self.freq_bias_1, self.freq_bias_2, self.freq_bias_3, self.freq_bias_4]
+        else:
+            self.freq_bias_5 = FrequencyBias_GCL(config, statistics, config.GLOBAL_SETTING.DATASET_CHOICE, predicate_all_list=self.bias_for_group_split[4])
+            if num_cls == 5:
+                freq_bias_all = [self.freq_bias_1, self.freq_bias_2, self.freq_bias_3, self.freq_bias_4,
+                                 self.freq_bias_5]
+            else:
+                self.freq_bias_6 = FrequencyBias_GCL(config, statistics, config.GLOBAL_SETTING.DATASET_CHOICE,
+                                                      predicate_all_list=self.bias_for_group_split[5])
+                if num_cls == 6:
+                    freq_bias_all = [self.freq_bias_1, self.freq_bias_2, self.freq_bias_3,
+                                     self.freq_bias_4, self.freq_bias_5, self.freq_bias_6]
+                else:
+                    self.freq_bias_7 = FrequencyBias_GCL(config, statistics, config.GLOBAL_SETTING.DATASET_CHOICE,
+                                                          predicate_all_list=self.bias_for_group_split[6])
+                    freq_bias_all = [self.freq_bias_1, self.freq_bias_2, self.freq_bias_3,
+                                     self.freq_bias_4, self.freq_bias_5, self.freq_bias_6, self.freq_bias_7]
+                    if num_cls > 7:
+                        exit('wrong num in multi_bias')
+        return freq_bias_all
+
+@registry.ROI_RELATION_PREDICTOR.register("DualTransPredictor")
+class DualTransPredictor(nn.Module):
+    def __init__(self, config, in_channels):
+        super(DualTransPredictor, self).__init__()
+        self.cfg = config
+        self.attribute_on = config.MODEL.ATTRIBUTE_ON
+        # load parameters
+        self.num_obj_cls = config.MODEL.ROI_BOX_HEAD.NUM_CLASSES
+        self.num_att_cls = config.MODEL.ROI_ATTRIBUTE_HEAD.NUM_ATTRIBUTES
+        self.num_rel_cls = config.MODEL.ROI_RELATION_HEAD.NUM_CLASSES
+        self.debug_flag = config.DEBUG
+        self.eval_fc = config.MODEL.ROI_RELATION_HEAD.DUAL_TRANS.EVAL_USE_FC
+        assert in_channels is not None
+        self.use_vision = config.MODEL.ROI_RELATION_HEAD.PREDICT_USE_VISION
+
+        # load class dict
+        statistics = get_dataset_statistics(config)
+        obj_classes, rel_classes, att_classes = statistics['obj_classes'], statistics['rel_classes'], statistics[
+            'att_classes']
+        assert self.num_obj_cls == len(obj_classes)
+        assert self.num_att_cls == len(att_classes)
+        assert self.num_rel_cls == len(rel_classes)
+        # ##################### init model #####################
+        self.use_gtrans_context = config.MODEL.ROI_RELATION_HEAD.DUAL_TRANS.USE_GTRANS_CONTEXT
+        # context layer (message pass)
+        if self.use_gtrans_context:
+            self.context_layer = GTransformerContext(config, obj_classes, rel_classes, in_channels)
+        else:
+            self.context_layer = TransformerContext(config, obj_classes, rel_classes, in_channels)
+
+        # post decoding
+        self.hidden_dim = config.MODEL.ROI_RELATION_HEAD.CONTEXT_HIDDEN_DIM
+        self.edge_repr_dim = self.hidden_dim * 2
+        self.pooling_dim = config.MODEL.ROI_RELATION_HEAD.CONTEXT_POOLING_DIM
+        self.post_obj_edge_repr = nn.Linear(self.hidden_dim, self.edge_repr_dim)
+        layer_init(self.post_obj_edge_repr, 10.0 * (1.0 / self.hidden_dim) ** 0.5, normal=True)
+
+        self.epsilon = 0.001
+
+        self.use_rel_graph = config.MODEL.ROI_RELATION_HEAD.DUAL_TRANS.USE_REL_GRAPH
+
+        # ### graph model
+        # use gcn as temp
+        self.use_graph_encode = config.MODEL.ROI_RELATION_HEAD.DUAL_TRANS.USE_GRAPH_ENCODE
+        self.graph_enc_strategy = config.MODEL.ROI_RELATION_HEAD.DUAL_TRANS.GRAPH_ENCODE_STRATEGY
+
+        if self.use_graph_encode:
+            if self.graph_enc_strategy == 'trans':
+                # encode relationship with trans
+                self.pred_up_dim = nn.Linear(self.edge_repr_dim, self.pooling_dim)
+                self.mix_ctx = nn.Linear(self.pooling_dim * 2, self.edge_repr_dim)
+
+                n_layer = config.MODEL.ROI_RELATION_HEAD.DUAL_TRANS.TRANSFORMER.REL_LAYER
+                num_head = config.MODEL.ROI_RELATION_HEAD.DUAL_TRANS.TRANSFORMER.NUM_HEAD
+                k_dim = config.MODEL.ROI_RELATION_HEAD.DUAL_TRANS.TRANSFORMER.KEY_DIM
+                v_dim = config.MODEL.ROI_RELATION_HEAD.DUAL_TRANS.TRANSFORMER.VAL_DIM
+                dropout_rate = config.MODEL.ROI_RELATION_HEAD.DUAL_TRANS.TRANSFORMER.DROPOUT_RATE
+                self.graph_encoder = nn.ModuleList(
+                    [
+                        BaseTransformerEncoder(input_dim=self.edge_repr_dim, out_dim=self.edge_repr_dim,
+                                               n_layer=n_layer, num_head=num_head, k_dim=k_dim, v_dim=v_dim,
+                                               dropout_rate=dropout_rate)
+                    ])
+            elif self.graph_enc_strategy == 'cross_trans':
+                # encode relationship with cross-Trans between obj and rel
+                self.pred_up_dim = nn.Linear(self.edge_repr_dim, self.pooling_dim)
+                self.mix_ctx = nn.Linear(self.pooling_dim * 2, self.edge_repr_dim)
+
+                n_layer = config.MODEL.ROI_RELATION_HEAD.DUAL_TRANS.TRANSFORMER.REL_LAYER
+                num_head = config.MODEL.ROI_RELATION_HEAD.DUAL_TRANS.TRANSFORMER.NUM_HEAD
+                k_dim = config.MODEL.ROI_RELATION_HEAD.DUAL_TRANS.TRANSFORMER.KEY_DIM
+                v_dim = config.MODEL.ROI_RELATION_HEAD.DUAL_TRANS.TRANSFORMER.VAL_DIM
+                dropout_rate = config.MODEL.ROI_RELATION_HEAD.DUAL_TRANS.TRANSFORMER.DROPOUT_RATE
+
+                self.graph_encoder = nn.ModuleList(
+                    [
+                        CrossTransformerEncoder(d_model_q=self.edge_repr_dim, d_model_kv=self.hidden_dim,
+                                                d_inner=self.edge_repr_dim,
+                                                n_layer=n_layer, num_head=num_head, k_dim=k_dim, v_dim=v_dim,
+                                                dropout_rate=dropout_rate)
+                    ])
+            elif self.graph_enc_strategy == 'all_trans':
+                # encode relationship with cross-Trans between obj and rel and trans among rel
+                self.pred_up_dim = nn.Linear(self.edge_repr_dim, self.pooling_dim)
+                self.mix_ctx = nn.Linear(self.pooling_dim * 2, self.edge_repr_dim)
+
+                n_layer = config.MODEL.ROI_RELATION_HEAD.DUAL_TRANS.TRANSFORMER.REL_LAYER
+                num_head = config.MODEL.ROI_RELATION_HEAD.DUAL_TRANS.TRANSFORMER.NUM_HEAD
+                k_dim = config.MODEL.ROI_RELATION_HEAD.DUAL_TRANS.TRANSFORMER.KEY_DIM
+                v_dim = config.MODEL.ROI_RELATION_HEAD.DUAL_TRANS.TRANSFORMER.VAL_DIM
+                dropout_rate = config.MODEL.ROI_RELATION_HEAD.DUAL_TRANS.TRANSFORMER.DROPOUT_RATE
+
+                self.graph_encoder_NE = nn.ModuleList(
+                    [
+                        CrossTransformerEncoder(d_model_q=self.edge_repr_dim, d_model_kv=self.hidden_dim,
+                                                d_inner=self.edge_repr_dim,
+                                                n_layer=n_layer, num_head=num_head, k_dim=k_dim, v_dim=v_dim,
+                                                dropout_rate=dropout_rate)
+                    ])
+                self.graph_encoder_EE = nn.ModuleList(
+                    [
+                        BaseTransformerEncoder(input_dim=self.edge_repr_dim, out_dim=self.edge_repr_dim,
+                                               n_layer=n_layer, num_head=num_head, k_dim=k_dim, v_dim=v_dim,
+                                               dropout_rate=dropout_rate)
+                    ])
+            elif self.graph_enc_strategy == 'mix':
+                self.pred_up_dim = nn.Linear(self.edge_repr_dim, self.pooling_dim)
+                self.mix_ctx = nn.Linear(self.pooling_dim * 2, self.edge_repr_dim)
+
+        # final classification
+        self.rel_visual_clf = nn.Linear(self.pooling_dim, self.num_rel_cls)
+
+        rel_final_dim = self.edge_repr_dim
+        self.rel_clf = nn.Linear(rel_final_dim, self.num_rel_cls)
+        self.post_rel2ctx = nn.Linear(rel_final_dim, self.pooling_dim)
+        layer_init(self.rel_visual_clf, xavier=True)
+        layer_init(self.rel_clf, xavier=True)
+        layer_init(self.post_rel2ctx, xavier=True)
+
+        # about visual feature of union boxes
+        if self.pooling_dim != config.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM:
+            self.union_single_not_match = True
+            self.up_dim = nn.Linear(config.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM, self.pooling_dim)
+            layer_init(self.up_dim, xavier=True)
+        else:
+            self.union_single_not_match = False
+
+        # bias module
+        self.bias_module = build_bias_module(config, statistics)
+        self.use_bias = config.MODEL.ROI_RELATION_HEAD.PREDICT_USE_BIAS
+
+    def forward(self, proposals, rel_pair_idxs, rel_labels, rel_binaries, roi_features, union_features, logger=None):
+        """
+        Predicate rel label
+        Args:
+            proposals: objs
+            rel_pair_idxs: object pair index of rel to be predicated
+            rel_labels: ground truth rel label
+            rel_binaries: binary matrix of relationship for each image
+            roi_features: visual feature of objs
+            union_features: visual feature of the union boxes of obj pairs
+            logger: Logger tool
+        Returns:
+            obj_dists (list[Tensor]): logits of object label distribution
+            rel_dists (list[Tensor])
+            rel_pair_idxs (list[Tensor]): (num_rel, 2) index of subject and object
+            union_features (Tensor): (batch_num_rel, context_pooling_dim): visual union feature of each pair
+        """
+        add_losses = {}
+        num_rels = [r.shape[0] for r in rel_pair_idxs]
+        num_objs = [len(b) for b in proposals]
+        assert len(num_rels) == len(num_objs)
+        rel_label_gt = torch.cat(rel_labels, dim=0) if rel_labels is not None else None
+
+        # ### context
+        obj_dists, obj_preds, obj_feats, ebd_vector = self.context_layer(roi_features, proposals, logger=logger)
+        obj_dists = obj_dists.split(num_objs, dim=0)
+        obj_preds = obj_preds.split(num_objs, dim=0)
+        # rel encoding
+        obj_repr_for_edge = self.post_obj_edge_repr(obj_feats).view(-1, 2, self.hidden_dim)
+        edge_rep, obj_pair_labels = self.composeEdgeRepr(obj_repr_for_edge=obj_repr_for_edge, obj_preds=obj_preds,#只是将obj_rep配对成pairwise
+                                                         rel_pair_idxs=rel_pair_idxs, num_objs=num_objs)
+
+        rel_positive_prob = torch.ones_like(edge_rep[:, 0])
+
+        # graph module
+        if self.use_graph_encode:
+            if self.use_rel_graph:
+                rel_adj_list = self.build_rel_graph(rel_positive_prob, num_rels, rel_pair_idxs, num_objs)
+            else:
+                rel_adj_list = [None] * len(num_rels)
+            # union_features
+            if self.graph_enc_strategy == 'cat_gcn':
+                pred_rep_list = []
+                union_features_down_dim = self.ctx_down_dim(union_features)
+                edge_rep = torch.cat((edge_rep, union_features_down_dim), dim=1)
+                edge_rep = self.mix_ctx(edge_rep)
+                for img_pred_feat, adj in zip(torch.split(edge_rep, num_rels), rel_adj_list):
+                    for encoder in self.graph_encoder:
+                        img_pred_feat = encoder(img_pred_feat, adj)
+                    pred_rep_list.append(img_pred_feat)
+                edge_rep = torch.cat(pred_rep_list, dim=0)
+            elif self.graph_enc_strategy == 'trans':
+                edge_rep = self.pred_up_dim(edge_rep)
+                edge_rep = torch.cat((edge_rep, union_features), dim=1)# 类似fusion的edge representation
+                edge_rep = self.mix_ctx(edge_rep)
+                if not self.use_rel_graph:
+                    rel_adj_list = None
+                for encoder in self.graph_encoder:
+                    edge_rep = encoder(edge_rep, num_rels, rel_adj_list)
+            elif self.graph_enc_strategy == 'cross_trans':
+                edge_rep = self.pred_up_dim(edge_rep)
+                edge_rep = torch.cat((edge_rep, union_features), dim=1)
+                edge_rep = self.mix_ctx(edge_rep)
+                edge_repr_list = edge_rep.split(num_rels)
+                obj_repr_list = obj_feats.split(num_objs)
+                edge_enc_results = []
+                for i in range(len(num_objs)):
+                    if num_rels[i] == 0 or num_objs[i] == 0:
+                        continue
+                    for encoder in self.graph_encoder:
+                        edge_enc_results.append(encoder(edge_repr_list[i], obj_repr_list[i], obj_repr_list[i]))
+                edge_rep = torch.cat(edge_repr_list, dim=0)
+            elif self.graph_enc_strategy == 'all_trans':
+                edge_rep = self.pred_up_dim(edge_rep)
+                edge_rep = torch.cat((edge_rep, union_features), dim=1)
+                edge_rep = self.mix_ctx(edge_rep)
+                edge_repr_list = edge_rep.split(num_rels)
+                obj_repr_list = obj_feats.split(num_objs)
+                edge_enc_results = []
+                for i in range(len(num_objs)):
+                    if num_rels[i] == 0 or num_objs[i] == 0:
+                        continue
+                    for encoder in self.graph_encoder_NE:
+                        edge_enc_results.append(encoder(edge_repr_list[i], obj_repr_list[i], obj_repr_list[i]))
+                edge_rep = torch.cat(edge_repr_list, dim=0)
+                if not self.use_rel_graph:
+                    rel_adj_list = None
+                for encoder in self.graph_encoder_EE:
+                    edge_rep = encoder(edge_rep, num_rels, rel_adj_list)
+            elif self.graph_enc_strategy == 'mix':
+                edge_rep = self.pred_up_dim(edge_rep)
+                edge_rep = torch.cat((edge_rep, union_features), dim=1)
+                edge_rep = self.mix_ctx(edge_rep)
+            else:
+                pred_rep_list = []
+                if not self.use_rel_graph:
+                    rel_adj_list = [None] * len(num_rels)
+                for img_pred_feat, adj in zip(torch.split(edge_rep, num_rels), rel_adj_list):
+                    for encoder in self.graph_encoder:#CrossTransformerEncoder
+                        img_pred_feat = encoder(img_pred_feat, adj)
+                    pred_rep_list.append(img_pred_feat)
+                edge_rep = torch.cat(pred_rep_list, dim=0)
+
+        # ### rel classification
+        rel_dists = self.rel_classification(edge_rep, obj_pair_labels, union_features, obj_preds, rel_pair_idxs,
+                                            num_rels, rel_label_gt, proposals)
+
+        return obj_dists, rel_dists, add_losses
+
+    def composeEdgeRepr(self, obj_repr_for_edge, obj_preds, rel_pair_idxs, num_objs):
+        # from object level feature to pairwise relation level feature
+        pred_reps = []
+        pair_preds = []
+
+        head_rep = obj_repr_for_edge[:, 0].contiguous().view(-1, self.hidden_dim)
+        tail_rep = obj_repr_for_edge[:, 1].contiguous().view(-1, self.hidden_dim)
+        head_reps = head_rep.split(num_objs, dim=0)
+        tail_reps = tail_rep.split(num_objs, dim=0)
+        for pair_idx, head_rep, tail_rep, obj_pred in zip(rel_pair_idxs, head_reps, tail_reps, obj_preds):
+            pred_reps.append(torch.cat((head_rep[pair_idx[:, 0]], tail_rep[pair_idx[:, 1]]), dim=-1))
+            pair_preds.append(torch.stack((obj_pred[pair_idx[:, 0]], obj_pred[pair_idx[:, 1]]), dim=1))
+        pair_rel_rep = cat(pred_reps, dim=0)
+        pair_pred = cat(pair_preds, dim=0)
+        return pair_rel_rep, pair_pred
+
+    def rel_classification(self, pred_rep, obj_pair_labels, union_features, obj_preds, rel_pair_idxs,
+                           num_rels, rel_label_gt, proposals):
+        # rel clf
+        rel_dists = self.rel_clf(pred_rep)
+        # remove bias
+        if not self.training and self.cfg.MODEL.ROI_RELATION_HEAD.DUAL_TRANS.REMOVE_BIAS:
+            rel_dists = rel_dists - self.rel_clf.bias
+
+        # use union box and mask convolution
+        if self.use_vision:
+            ctx_gate = self.post_rel2ctx(pred_rep)
+            if self.union_single_not_match:
+                visual_rep = ctx_gate * self.up_dim(union_features)
+            else:
+                visual_rep = ctx_gate * union_features
+            rel_dists = rel_dists + self.rel_visual_clf(visual_rep)
+
+        # ### use bias module
+        bias = self.bias_module(obj_pair_labels=obj_pair_labels, num_rels=num_rels, obj_preds=obj_preds,
+                                gt=rel_label_gt, bbox=[proposal.bbox for proposal in proposals],
+                                rel_pair_idxs=rel_pair_idxs)
+        if bias is not None:
+            rel_dists = rel_dists + bias
+
+        # format operation
+        rel_dists = rel_dists.split(num_rels, dim=0)
+        return rel_dists
+
+    def build_rel_graph(self, rel_positive_prob, num_rels, rel_pair_idxs, num_objs):
+        """
+        build rel adjust matrix based on rough clf result
+        Args:
+            rel_positive_prob: [total_num_rel]
+            num_rels:
+            rel_pair_idxs:
+            num_objs:
+        Returns: adj matrix of rels
+        """
+        positive_rel_split = torch.split(rel_positive_prob, num_rels)
+        rel_graph = []
+        for rel_cls, rel_pair_idx, num_obj in zip(positive_rel_split, rel_pair_idxs, num_objs):
+            num_rel = rel_pair_idx.size(0)
+
+            rel_obj_matrix = torch.zeros((num_rel, num_obj), device=rel_cls.device)
+            if self.eval_fc and not self.training:
+                #  in test use fc, for debug
+                rel_obj_matrix += 1
+
+            idx = torch.arange(num_rel)
+            valid_score = rel_cls.float()
+
+            rel_obj_matrix[idx, rel_pair_idx[:, 0]] += valid_score#[num_rel,num_obj]
+            rel_obj_matrix[idx, rel_pair_idx[:, 1]] += valid_score
+
+            adj = torch.matmul(rel_obj_matrix, rel_obj_matrix.T)
+
+            adj[idx, idx] = 1#adj matrix:任意两个relation pair,sub 或者obj编号对的上，就为1，表示有关
+
+            adj = adj + self.epsilon
+            rel_graph.append(adj)
+
+        return rel_graph
 @registry.ROI_RELATION_PREDICTOR.register("TransformerPredictor")
 class TransformerPredictor(nn.Module):
     def __init__(self, config, in_channels):

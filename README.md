@@ -4,8 +4,13 @@
 ![PyTorch](https://img.shields.io/badge/pytorch-1.4.0-%237732a8)
 
 Our paper [Biasing like human: a cognitive bias framework for scene graph generation] official code
-<!-- (https://arxiv.org/abs/2104.00308) has been accepted by CVPR 2021. -->
-
+<!-- (https://arxiv.org/abs/2104.00308) -->
+We also announce a new scene graph branchmark as replacement of scene-graph-brenchmark and PySGG. There
+are following updating:
+- Add more state of art methods: Dual-Transformer, SHA, C-bias
+- Allowing batch size more than one in test/val phrase (fixed from PySGG).
+- fix truncate image error problem.
+- Allowing loading different size weights with same name. 
 ## Installation
 
 Check [INSTALL.md](INSTALL.md) for installation instructions.

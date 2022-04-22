@@ -111,4 +111,6 @@ def main():
 
 
 if __name__ == "__main__":
+    # state_dict = torch.load('checkpoints/detection/pretrained_faster_rcnn/dual_detector.pth', map_location="cpu")
+    # torch.save(state_dict, 'checkpoints/detection/pretrained_faster_rcnn/dual_detector.pth', _use_new_zipfile_serialization=False)
     main()

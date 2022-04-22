@@ -9,7 +9,7 @@ from pysgg.modeling.roi_heads.attribute_head.roi_attribute_feature_extractors im
     make_roi_attribute_feature_extractor
 from pysgg.modeling.roi_heads.box_head.roi_box_feature_extractors import make_roi_box_feature_extractor
 from pysgg.structures.boxlist_ops import boxlist_union
-
+from pysgg.modeling.roi_heads.relation_head.classifier import build_classifier
 from pysgg.layers import (
     BatchNorm2d,
     Conv2d,
@@ -18,6 +18,10 @@ from pysgg.layers import (
 )
 from pysgg.data import get_dataset_statistics
 from .utils_motifs import obj_edge_vectors
+from pysgg.data.datasets.visual_genome import load_info
+from pysgg.utils.imports import import_file
+from pysgg.modeling.roi_heads.relation_head.patch_attention import ViT
+from pysgg.structures.bounding_box import BoxList
 @registry.ROI_RELATION_FEATURE_EXTRACTORS.register("RelationFeatureExtractor")
 class RelationFeatureExtractor(nn.Module):
     """
@@ -91,9 +95,14 @@ class RelationFeatureExtractor(nn.Module):
             tail_proposal = proposal[rel_pair_idx[:, 1]]
 
             union_proposal = boxlist_union(head_proposal, tail_proposal)
-
             union_proposals.append(union_proposal)
-
+            #计算sub obj 相对于union box的位置
+            h=head_proposal.bbox; t=tail_proposal.bbox
+            h1 = h[:,:2]-union_proposal.bbox[:,:2]
+            h2 = h[:,2:]-union_proposal.bbox[:,:2]
+            t1 = t[:, :2] - union_proposal.bbox[:, :2]
+            t2 = t[:, 2:] - union_proposal.bbox[:, :2]
+            union_proposal.add_field('relative_boxes',torch.cat((h1, h2, t1, t2), -1),is_custom=True)#用于head tail相对union box的坐标
             # use range to construct rectangle, sized (rect_size, rect_size)
             num_rel = len(rel_pair_idx)
             dummy_x_range = torch.arange(self.rect_size, device=device).view(1, 1, -1).expand(num_rel, self.rect_size,
@@ -123,7 +132,7 @@ class RelationFeatureExtractor(nn.Module):
         union_vis_features = self.feature_extractor.pooler(x, union_proposals)#对每一layer的特征算pool,在将通道拼接、缩减
         #这里加入pair的language feature
         if self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_EDGE:
-            union_vis_features=self.visual_language_merger_edge(union_vis_features, proposals, rel_pair_idxs)
+            union_vis_features=self.visual_language_merger_edge(union_vis_features, proposals, rel_pair_idxs,union_proposals)
         # merge two parts
         if self.geometry_feature:
             # rectangle feature. size (total_num_rel, in_channels, POOLER_RESOLUTION, POOLER_RESOLUTION)
@@ -167,12 +176,24 @@ class make_visual_language_merger_edge(nn.Module):
         #     nn.ReLU(True))
         self.latest_fusion=False#在决策层相加
         self.early_fusion = True  #
-        statistics = get_dataset_statistics(cfg)
-        obj_classes, rel_classes = statistics['obj_classes'], statistics['rel_classes']
-        self.num_obj_classes = len(obj_classes)
-        self.num_rel_classes = len(rel_classes)
-        self.obj_classes = obj_classes
-        self.rel_classes = rel_classes
+
+        paths_catalog = import_file(
+            "pysgg.config.paths_catalog", cfg.PATHS_CATALOG, True
+        )
+        dataset_names = cfg.DATASETS.TRAIN
+        DatasetCatalog = paths_catalog.DatasetCatalog
+        for dataset_name in dataset_names:
+            data = DatasetCatalog.get(dataset_name, cfg)
+            dict_file = data['args']['dict_file']
+        self.obj_classes, self.rel_classes, self.ind_to_attributes = load_info(
+            dict_file)
+
+        self.num_obj_classes = len(self.obj_classes)
+        self.num_rel_classes = len(self.rel_classes)
+        self.pos_embed = nn.Sequential(*[
+            nn.Linear(9, 32), nn.BatchNorm1d(32, momentum=0.001),
+            nn.Linear(32, 200), nn.ReLU(inplace=True),
+        ])
         # mode
         if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_BOX:
             if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL:
@@ -184,12 +205,19 @@ class make_visual_language_merger_edge(nn.Module):
         embed_dim = cfg.MODEL.ROI_RELATION_HEAD.EMBED_DIM
         obj_embed_vecs = obj_edge_vectors(self.obj_classes, wv_dir=cfg.GLOVE_DIR,
                                           wv_dim=embed_dim)  ##[151,200]
-        self.sublanguageembedding = nn.Embedding(self.num_obj_classes,embed_dim)
-        self.objlanguageembedding = nn.Embedding(self.num_obj_classes, embed_dim)
+        if self.cfg.MODEL.ROI_RELATION_HEAD.USE_SEM_WORD_EMBEDDING:
+            self.subemembedding = build_classifier(512, embed_dim)
+            self.objemembedding = build_classifier(512, embed_dim)
+            with torch.no_grad():
+                self.subemembedding.reset_parameters()
+                self.objemembedding.reset_parameters()
+        else:#使用word2voc
+            self.sublanguageembedding = nn.Embedding(self.num_obj_classes, embed_dim)
+            self.objlanguageembedding = nn.Embedding(self.num_obj_classes, embed_dim)
 
-        with torch.no_grad():
-            self.sublanguageembedding.weight.copy_(obj_embed_vecs, non_blocking=True)
-            self.objlanguageembedding.weight.copy_(obj_embed_vecs, non_blocking=True)
+            with torch.no_grad():
+                self.sublanguageembedding.weight.copy_(obj_embed_vecs, non_blocking=True)
+                self.objlanguageembedding.weight.copy_(obj_embed_vecs, non_blocking=True)
         # self.ops =  nn.Sequential(*[
         #     torch.nn.AvgPool2d(8,padding=2),
         #     torch.nn.Conv2d(1, 51, 3, 1, bias=False),
@@ -228,13 +256,35 @@ class make_visual_language_merger_edge(nn.Module):
         # )
         self.ops = nn.Sequential(*[
             torch.nn.AvgPool2d(29, padding=2),
-            torch.nn.Conv2d(1, 256, 3, 1, bias=False),
+            torch.nn.Conv2d(1, 256, 3, 1, bias=True),
             BatchNorm2d(256),
             nn.ReLU(inplace=True),
-            torch.nn.Conv2d(256, 256, 3, 3, bias=False),
+            torch.nn.Conv2d(256, 256, 3, 3, bias=True),
             BatchNorm2d(256),
             nn.ReLU(inplace=True)
+
         ])
+        if self.cfg.MODEL.ROI_RELATION_HEAD.LANGUAGE_SPATIAL_ATTENTION:
+            # #for 7*7map
+            # self.ops2 = nn.Sequential(*[
+            #     torch.nn.AvgPool2d(29, padding=2),
+            #     torch.nn.Conv2d(1, 256, 3, 1,1, bias=False),
+            #     BatchNorm2d(256),
+            #     nn.ReLU(inplace=True),
+            #     torch.nn.Conv2d(256, 256, 3, 1,1, bias=False),
+            #     BatchNorm2d(256),
+            #     nn.ReLU(inplace=True)
+            # ])
+            # # for calculate attention
+            # self.ops3 = nn.Sequential(*[
+            #
+            #     torch.nn.Conv2d(256, 50, kernel_size=3, stride=1,padding=1),
+            #     BatchNorm2d(50),
+            #     nn.ReLU(inplace=True),
+            #     torch.nn.Conv2d(50,256, kernel_size=3, stride=1,padding=1),
+            #     nn.Sigmoid(),
+            # ])
+            self.vit = ViT(image_size=7,patch_size=1,num_classes=self.num_rel_classes,dim=256,depth = 2,heads = 4,dim_head=64,channels=256,mlp_dim = 512,dropout = 0.1,emb_dropout = 0.1)
 
         # self.motif_transform=make_fc(7*7*256,1024)
         # self.c1=Conv2d(1, 256, 3, 1, 1, bias=False)
@@ -244,19 +294,23 @@ class make_visual_language_merger_edge(nn.Module):
         # self.bn2=BatchNorm2d(256)
         # self.avgpool=torch.nn.AvgPool2d(28,padding=2)
 
-    def forward(self, visual_feature,proposals,rel_pair_idxs):
+    def forward(self, visual_feature,proposals,rel_pair_idxs,union_proposals):
         # if self.latest_fusion:
             # visual=self.mlp1(input1)
             # language=self.mlp2(input2)
             # merge=visual+language
             # return merge
+        # pos_embed = self.pos_embed(encode_box_info(proposals))
         if self.early_fusion:
             if self.cfg.MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL:  # obj_embed_by_pred_dist dim:200。obj_labels是把batch里的拼在一起
                 obj_labels = torch.cat([proposal.get_field("labels") for proposal in proposals], dim=0).detach()
+
+
                 subwordembedding_corpus = self.sublanguageembedding(
                     obj_labels.long())  # word embedding层，输入word标签得embedding
                 objwordembedding_corpus = self.objlanguageembedding(
                     obj_labels.long())
+
             else:
                 if self.cfg.MODEL.ROI_RELATION_HEAD.use_possibility_merger:
 
@@ -266,16 +320,18 @@ class make_visual_language_merger_edge(nn.Module):
                 else:
                     obj_labels = torch.cat([proposal.get_field('pred_labels') for proposal in proposals], dim=0).detach()
                     subwordembedding_corpus = self.sublanguageembedding(
-                        obj_labels.long())  # word embedding层，输入word标签得embedding
+                    obj_labels.long())  # word embedding层，输入word标签得embedding
                     objwordembedding_corpus = self.objlanguageembedding(
-                        obj_labels.long())
+                    obj_labels.long())
+
 
             num = [len(proposal) for proposal in proposals]
             subwordembedding_corpus = subwordembedding_corpus.split(num, dim=0)
             objwordembedding_corpus = objwordembedding_corpus.split(num, dim=0)
             # subwordembedding_corpus = subwordembedding_corpus.split(num, dim=0)
             # objwordembedding_corpus = objwordembedding_corpus.split(num, dim=0)
-            languageembedding=[]
+            language_channel_attention=[]
+            language_spatial_attention = []
 
             # for subwordembedding,objwordembedding,rel_pair_idx in zip(subwordembedding_corpus,objwordembedding_corpus,rel_pair_idxs):
             #
@@ -287,15 +343,48 @@ class make_visual_language_merger_edge(nn.Module):
             # mixed=visual_feature+languageembedding.to('cuda')
             # return mixed
             for subwordembedding,objwordembedding,rel_pair_idx in zip(subwordembedding_corpus,objwordembedding_corpus,rel_pair_idxs):
+                #将相对union box的sub obj位置编码，分别merge到对应的embedding去
 
-                language_matrixs=(subwordembedding[rel_pair_idx[:,0]].unsqueeze(-1) * objwordembedding[rel_pair_idx[:,1]].unsqueeze(-1).permute((0, 2, 1))).unsqueeze(1)
+
+
+                language_matrixs=((subwordembedding[rel_pair_idx[:,0]]).unsqueeze(-1) * (objwordembedding[rel_pair_idx[:,1]]).unsqueeze(-1).permute((0, 2, 1))).unsqueeze(1)
                 op=self.ops(language_matrixs)
-                # if self.cfg.MODEL.ROI_RELATION_HEAD.PREDICTOR=='MotifPredictor':
-                #     op=self.motif_transform(op.view(rel_pair_idx.size(0),-1))
 
-                languageembedding.append(op)
+                language_channel_attention.append(op)
+                # if self.cfg.MODEL.ROI_RELATION_HEAD.LANGUAGE_SPATIAL_ATTENTION:
+                    # head_pos = self.pos_embed(encode_box_info(union_proposal.get_field("relative_boxes")[:,:4],union_proposal.size))
+                    # tail_pos = self.pos_embed(encode_box_info(union_proposal.get_field("relative_boxes")[:, 4:],union_proposal.size))
+                # union_proposal.del_field("relative_boxes")
                 del language_matrixs; del op
-            languageembedding=torch.cat(languageembedding,0)#[N_PAIRS,1,200,200]
-            mixed=visual_feature+languageembedding
-            return mixed
 
+            language_channel_attention=torch.cat(language_channel_attention,0)#[N_PAIRS,1,200,200]
+            if self.cfg.MODEL.ROI_RELATION_HEAD.LANGUAGE_SPATIAL_ATTENTION:
+                # language_spatial_attention = torch.cat(language_spatial_attention, 0)
+                # visual_feature = visual_feature/ (visual_feature+1e-8).norm('fro',dim=(2,3), keepdim=True).cuda()
+                # language_spatial_attention = language_spatial_attention/(language_spatial_attention+1e-8).norm('fro',dim=(2,3), keepdim=True).cuda()
+                spatial_attention = self.vit(visual_feature+language_channel_attention)
+                mixed=spatial_attention+(visual_feature+language_channel_attention)
+            else:
+                mixed = visual_feature + language_channel_attention
+            return mixed
+#和motif里面的一样，删去冗余部分
+def encode_box_info(boxes,img_size):
+    """
+    encode proposed box information (x1, y1, x2, y2) to
+    (cx/wid, cy/hei, w/wid, h/hei, x1/wid, y1/hei, x2/wid, y2/hei, wh/wid*hei)
+    """
+
+
+
+    wid = img_size[0]
+    hei = img_size[1]
+    wh = boxes[:, 2:] - boxes[:, :2] + 1.0
+    xy = boxes[:, :2] + 0.5 * wh
+    w, h = wh.split([1,1], dim=-1)
+    x, y = xy.split([1,1], dim=-1)
+    x1, y1, x2, y2 = boxes.split([1,1,1,1], dim=-1)
+    assert wid * hei != 0
+    info = torch.cat([w/wid, h/hei, x/wid, y/hei, x1/wid, y1/hei, x2/wid, y2/hei,
+                      w*h/(wid*hei)], dim=-1).view(-1, 9)
+
+    return info

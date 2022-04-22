@@ -9,7 +9,8 @@ from pysgg.modeling.roi_heads.relation_head.utils_relation import get_box_pair_i
     layer_init
 from pysgg.modeling.utils import cat
 from .utils_motifs import obj_edge_vectors, encode_box_info
-
+from pysgg.data.datasets.visual_genome import load_info
+from pysgg.utils.imports import import_file
 
 class IMPContext(nn.Module):
     def __init__(self, config, in_channels, hidden_dim=512, num_iter=3):
@@ -116,12 +117,19 @@ class PairwiseFeatureExtractor(nn.Module):
     def __init__(self, config, in_channels):
         super(PairwiseFeatureExtractor, self).__init__()
         self.cfg = config
-        statistics = get_dataset_statistics(config)
-        obj_classes, rel_classes = statistics['obj_classes'], statistics['rel_classes']
-        self.num_obj_classes = len(obj_classes)
-        self.num_rel_classes = len(rel_classes)
-        self.obj_classes = obj_classes
-        self.rel_classes = rel_classes
+        paths_catalog = import_file(
+            "pysgg.config.paths_catalog", self.cfg.PATHS_CATALOG, True
+        )
+        dataset_names = self.cfg.DATASETS.TRAIN
+        DatasetCatalog = paths_catalog.DatasetCatalog
+        for dataset_name in dataset_names:
+            data = DatasetCatalog.get(dataset_name, self.cfg)
+            dict_file = data['args']['dict_file']
+        self.obj_classes, self.rel_classes, self.ind_to_attributes = load_info(
+            dict_file)
+
+        self.num_obj_classes = len(self.obj_classes)
+        self.num_rel_classes = len(self.rel_classes)
 
         # mode
         if self.cfg.MODEL.ROI_RELATION_HEAD.USE_GT_BOX:
@@ -301,7 +309,7 @@ class PairwiseFeatureExtractor(nn.Module):
         if self.word_embed_feats_on:
             obj_embed_by_pred_labels = self.obj_embed_on_pred_label(obj_pred_labels.long())
 
-        # average action in test phrase for causal effect analysis
+        # average action in test phrase for causal effect analysis#todo 感觉下面的是多余的处理？？
         if self.word_embed_feats_on:
             augment_obj_feat = cat((obj_embed_by_pred_labels, inst_roi_feats, augment_obj_feat), -1)#先前的augment_obj_feat是roi_feat+world_dis+pos_embe
         else:

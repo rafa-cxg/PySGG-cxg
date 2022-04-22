@@ -36,7 +36,8 @@ from pysgg.modeling.utils import cat
 from torch.nn import functional as F
 
 from ..relation_head.utils_motifs import obj_edge_vectors, encode_box_info,env_pos_rel_box_info
-
+from pysgg.data.datasets.visual_genome import load_info
+from pysgg.utils.imports import import_file
 class Two_Stage_Head(torch.nn.Module):
     """
     Generic Relation Head class.
@@ -45,12 +46,19 @@ class Two_Stage_Head(torch.nn.Module):
     def __init__(self, cfg, in_channels):
         super(Two_Stage_Head, self).__init__()
         self.cfg = cfg.clone()
-        statistics = get_dataset_statistics(self.cfg)
-        obj_classes, rel_classes = statistics['obj_classes'], statistics['rel_classes']
-        self.num_obj_classes = len(obj_classes)
-        self.num_rel_classes = len(rel_classes)
-        self.obj_classes = obj_classes
-        self.rel_classes = rel_classes
+        paths_catalog = import_file(
+            "pysgg.config.paths_catalog", cfg.PATHS_CATALOG, True
+        )
+        dataset_names = cfg.DATASETS.TRAIN
+        DatasetCatalog = paths_catalog.DatasetCatalog
+        for dataset_name in dataset_names:
+            data = DatasetCatalog.get(dataset_name, cfg)
+            dict_file = data['args']['dict_file']
+        self.obj_classes, self.rel_classes, self.ind_to_attributes = load_info(
+            dict_file)
+
+        self.num_obj_classes = len(self.obj_classes)
+        self.num_rel_classes = len(self.rel_classes)
         self.data_dir = 'datasets/vg/'
         self.cluster_dir='clustering/'
         self.num_obj_cls = cfg.MODEL.ROI_BOX_HEAD.NUM_CLASSES#151
@@ -123,6 +131,7 @@ class Two_Stage_Head(torch.nn.Module):
         if cfg.MODEL.TWO_STAGE_ON:
             self.two_stage_predictor = make_Two_Stage_predictor(cfg, feat_dim)
 
+
         self.post_processor = make_roi_relation_post_processor(cfg)
         self.loss_evaluator_2stage = make_two_stage_loss_evaluator(cfg)
         self.loss_evaluator_distribution = make_loss_evaluator_distribution(cfg)
@@ -133,7 +142,6 @@ class Two_Stage_Head(torch.nn.Module):
 
         # parameters
         self.use_union_box = self.cfg.MODEL.TWO_STAGE_HEAD.UNION_BOX
-
         self.rel_pn_thres = torch.nn.Parameter(torch.Tensor([0.5]), requires_grad=False)
         self.rel_pn_thres_for_test = torch.nn.Parameter(
             torch.Tensor(
@@ -143,6 +151,8 @@ class Two_Stage_Head(torch.nn.Module):
             ),
             requires_grad=False,
         )
+
+
         self.rel_pn = None
         self.use_relness_ranking = False
         self.use_same_label_with_clser = False
@@ -235,7 +245,7 @@ class Two_Stage_Head(torch.nn.Module):
             roi_features=None
 
             obj_rep=self.pure_senmatic_feature(proposals, rel_pair_idxs,obj_embed_by_pred_dist)
-            distribution=self.make_prior_distribution (proposals, rel_pair_idxs)
+
 
 
         if self.cfg.MODEL.TWO_STAGE_HEAD.INDIVIDUAL_BOX:
@@ -284,7 +294,7 @@ class Two_Stage_Head(torch.nn.Module):
             relation_logits = self.two_stage_predictor(features[3],**sampling)#[N_pair,num_group]
          # proposals, rel_pair_idxs, rel_pn_labels,relness_net_input,roi_features,union_features, None
         # for test
-        for proposal, two_stage_logit,dist in zip(proposals, relation_logits,distribution):
+        for proposal, two_stage_logit in zip(proposals, relation_logits):
             # two_stage_logit = F.softmax(two_stage_logit, -1)  # 传给第二阶段的logit限制在0-1
             proposal.del_field('center')
             proposal.add_field("two_stage_pred_rel_logits", two_stage_logit,is_custom=True)#在cpu上运行
@@ -300,6 +310,7 @@ class Two_Stage_Head(torch.nn.Module):
         else:
             if self.loss_distribution:
                 try:
+                    distribution = self.make_prior_distribution(proposals, rel_pair_idxs, rel_labels_all)
                     distribution
                 except NameError:
                     print("Check in whether \"PURE_SENMENTIC\" is ON in cfg file!")
@@ -434,22 +445,42 @@ class  make_prior_distribution(torch.nn.Module):
                 self.mode = "sgcls"
         else:
             self.mode = "sgdet"
-    def forward(self,proposals,rel_pair_idxs):
+    def forward(self,proposals,rel_pair_idxs,rel_labels):
         embed=[]
         with torch.no_grad():
             for image, rel_pair_idx in enumerate(rel_pair_idxs):
+
                 if self.mode == 'predcls':
                     prior=((self.sub_distribution[
                         proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 0]]]) * (
                      self.obj_distribution[
                          proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 1]]]))
                     prior=torch.nn.functional.normalize(prior,p=1)
+                    if self.cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT and self.cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT_FACTOR!=0:
+
+                        prior=prior*self.cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT_FACTOR
+                        bias=torch.zeros_like(prior, dtype=prior.dtype).scatter_(1, rel_labels[image].view(-1, 1), self.cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT_FACTOR)
+                        bias[:,0]=0
+                        prior+=bias #bias是与prior一样维度的0矩阵，但标签所处元素位置为DYNAMIC_GT_FACTOR值
+                        prior = torch.nn.functional.normalize(prior, p=1)#消除对负样本放缩的影响
                     embed.append(prior)
 
                 else:
-                    # label=torch.argmax(proposals[image].get_field('predict_logits'),-1)
-                    embed.append(self.sub_distribution[proposals[image].get_field('pred_labels').type(torch.LongTensor)[
-                        rel_pair_idx[:, 0]]]*self.obj_distribution[proposals[image].get_field('pred_labels').type(torch.LongTensor)[
-                        rel_pair_idx[:, 1]]])
+                    prior = ((self.sub_distribution[
+                        proposals[image].get_field('pred_labels').type(torch.LongTensor)[rel_pair_idx[:, 0]]]) * (
+                                 self.obj_distribution[
+                                     proposals[image].get_field('pred_labels').type(torch.LongTensor)[rel_pair_idx[:, 1]]]))
+                    prior = torch.nn.functional.normalize(prior, p=1)
+                    if self.cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT and self.cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT_FACTOR!=0:
+
+                        prior=prior*self.cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT_FACTOR
+                        bias=torch.zeros_like(prior, dtype=prior.dtype).scatter_(1, rel_labels[image].view(-1, 1), (1-self.cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT_FACTOR))
+                        bias[:, 0] = 0
+                        prior += bias  # bias是与prior一样维度的0矩阵，但标签所处元素位置为DYNAMIC_GT_FACTOR值
+                        prior = torch.nn.functional.normalize(prior, p=1)
+                    embed.append(prior)
+
+
+
         return embed
         # return torch.cat(embed).cuda().type(torch.cuda.FloatTensor)

@@ -1,3 +1,5 @@
+#GLOVE_DIR: /public/data1/users/chenchao278/model/glove
+#CONCEPTNET_DIR: /public/data1/users/chenchao278/data/conceptNet/
 INPUT:
   MIN_SIZE_TRAIN: (600,)
   MAX_SIZE_TRAIN: 1000
@@ -6,22 +8,6 @@ INPUT:
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
   WEIGHT: "catalog://ImageNetPretrained/FAIR/20171220/X-101-32x8d"
-  TWO_STAGE_ON: true
-  TWO_STAGE_HEAD:
-    loss_distribution: true
-    PURE_SENMENTIC: true
-    USE_GLOVE: true #只有在PURE_SEMENTIC为TRUE才起效
-    INDIVIDUAL_BOX: false
-    UNION_BOX: false  #union和indi不能同时为true
-    transformer_pos: false
-    HIDDEN_DIM: 1024
-    PREDICTOR: TwoStagePredictor
-    NUM_REL_GROUP: 50
-    BATCH_SIZE_PER_IMAGE: 1000
-    POSITIVE_FRACTION: 1
-    LOSS_TYPE: 'cos_loss' # 仅在loss_dist为true时成立
-    DYNAMIC_GT: False #使用可变EEM的GT
-    DYNAMIC_GT_FACTOR: 0.5 #原分布的占比
   BACKBONE:
     CONV_BODY: "R-101-FPN" # VGG-16
   RESNETS:
@@ -83,13 +69,11 @@ MODEL:
     POOLING_ALL_LEVELS: True
     LABEL_SMOOTHING_LOSS: False
     FEATURE_EXTRACTOR: "RelationFeatureExtractor"
-    USE_SEM_WORD_EMBEDDING: False
-    LANGUAGE_SPATIAL_ATTENTION: False
     #################### Select Relationship Model ####################
     #PREDICTOR: "MotifPredictor"
     #PREDICTOR: "VCTreePredictor"
-    #PREDICTOR: "TransformerPredictor"
-    PREDICTOR: "CausalAnalysisPredictor"
+    PREDICTOR: "TransformerPredictor"
+#    PREDICTOR: "CausalAnalysisPredictor"
     ################# Parameters for Motif Predictor ##################
     CONTEXT_OBJ_LAYER: 1
     CONTEXT_REL_LAYER: 1
@@ -101,27 +85,29 @@ MODEL:
       SEPARATE_SPATIAL: False         # separate spatial in union feature
       CONTEXT_LAYER: "motifs"         # candicates: motifs, vctree, vtranse
       SPATIAL_FOR_VISION: True
-      EFFECT_ANALYSIS: False #True
+      EFFECT_ANALYSIS: True
     ############### Parameters for Transformer Predictor ##############
     TRANSFORMER:
       DROPOUT_RATE: 0.1
+#      USE_GRAPH_EMBEDDING: False
+#      USE_GRAPH_MASK: False
+#      GRAPH_EBD:
+#        ENCODE_LAYER: GCN
+#        GRAPH_BIAS: one
+#        GAT:
+#          DROPOUT: 0.1
+#          HID_DIM: 128
+#          LEAKY_RELU_ALPHA: 0.001
+#          NUM_HEAD: 8
+#        GCN:
+#          DROPOUT: 0.1
+#          HID_DIM: 128
       OBJ_LAYER: 4
       REL_LAYER: 2
       NUM_HEAD: 8
       KEY_DIM: 64
       VAL_DIM: 64
       INNER_DIM: 2048
-    ############### Parameters for DualTransformer Predictor ##############
-    BIAS_MODULE:
-      USE_PENALTY: False # should be enable when use following,,
-      PENALTY_BIAS:
-        PENALTY_TYPE: 'count_bias'
-    #default base+cb
-    DUAL_TRANS :
-      USE_GRAPH_ENCODE: True
-      GRAPH_ENCODE_STRATEGY: trans
-
-
 DATASETS:
   TRAIN: ("VG_stanford_filtered_with_attribute_train",)
   VAL: ("VG_stanford_filtered_with_attribute_val",)
@@ -130,53 +116,38 @@ DATALOADER:
   SIZE_DIVISIBILITY: 32
 SOLVER:
   BIAS_LR_FACTOR: 1
-  BASE_LR: 0.01
+  BASE_LR: 0.001
+  # change when batch size change
+  IMS_PER_BATCH: 16
+  MAX_ITER: 16000
+  WARMUP_ITERS: 500
+  STEPS: (10000, 16000)
+  # end change
   WARMUP_FACTOR: 0.1
-  WEIGHT_DECAY: 0.00001
+  WARMUP_METHOD: linear
+  GAMMA: 0.1
+  WEIGHT_DECAY: 0.0001
   MOMENTUM: 0.9
   GRAD_NORM_CLIP: 5.0
-  STEPS: (10000, 16000)
-  MAX_ITER: 80000
   VAL_PERIOD: 2000
-  CHECKPOINT_PERIOD: 2000
+  CHECKPOINT_PERIOD: 4000
   PRINT_GRAD_FREQ: 4000
   SCHEDULE:
     # the following paramters are only used for WarmupReduceLROnPlateau
-    TYPE: "WarmupReduceLROnPlateau"    # WarmupMultiStepLR, WarmupReduceLROnPlateau
-    PATIENCE: 6
+    TYPE: "WarmupMultiStepLR"    # WarmupMultiStepLR, WarmupReduceLROnPlateau
+    PATIENCE: 2
     THRESHOLD: 0.001
     COOLDOWN: 0
-    FACTOR: 0.8
-    MAX_DECAY_STEP: 24
+    FACTOR: 0.1
+    MAX_DECAY_STEP: 5
+
 OUTPUT_DIR: './output/relation_baseline'
 TEST:
+  IMS_PER_BATCH: 4
   ALLOW_LOAD_FROM_CACHE: False
   RELATION:
     SYNC_GATHER: True      # turn on will slow down the evaluation to solve the sgdet test out of memory problem
     REQUIRE_OVERLAP: False
     LATER_NMS_PREDICTION_THRES: 0.5
-GLOBAL_SETTING:
-  ############### Parameters for Basic Encoder in Predictor ##############
-  #RELATION_PREDICTOR: "MotifsLikePredictor"
-  #RELATION_PREDICTOR: "VCTreePredictor"
-  #RELATION_PREDICTOR: "TransLikePredictor"
-  #RELATION_PREDICTOR: "MotifsLike_GCL"
-  #RELATION_PREDICTOR: "VCTree_GCL"
-  RELATION_PREDICTOR: "TransLike_GCL"
-  BASIC_ENCODER: 'Hybrid-Attention'
-  # ['Self-Attention', 'Cross-Attention', 'Hybrid-Attention'] for Transformer-Based Model, and ['Motifs', 'VTransE'] for DNN-Based Model
-  ############### Parameters for Global Settings of Experiment ##############
-  DATASET_CHOICE: 'VG'
-  USE_BIAS: True                                      # If use the relation statistics to serve as the priori knowledge
-  CHOOSE_BEST_MODEL_BY_METRIC: '_mean_recall'         # ['_recall', '_mean_recall'] To control which metric is the main concern
-  PRINT_INTERVAL: 100
-  ############### Parameters for GCL Loss Setting ##############
-  GCL_SETTING:
-    GROUP_SPLIT_MODE: 'divide4'                       # To control the number of groups ['divide4', ''divide3', 'divide5', 'average']
-    KNOWLEDGE_LOSS_COEFFICIENT: 1.0                   # To control the loss of Knowledge Transfer
-    KNOWLEDGE_TRANSFER_MODE: 'KL_logit_TopDown'       # To control how to transfer the knowledge between different auxiliary classifiers
-    # ['None', 'KL_logit_Neighbor', 'KL_logit_None', 'KL_logit_TopDown', 'KL_logit_BottomUp', 'KL_logit_BiDirection']
-    ############### The Following Parameters would not affect the performance much, is nearly useless ##############
-    NO_RELATION_RESTRAIN: True              # If two object do not have a relation, then limit their contribution to the final loss
-    ZERO_LABEL_PADDING_MODE: 'rand_insert'  # ['rand_insert', 'rand_choose', 'all_include'], to control how to insert into the relation which is ZERO
-    NO_RELATION_PENALTY: 0.1
+  CUSTUM_EVAL: False       # eval SGDet model on custum images, output a json
+  CUSTUM_PATH: '.'         # the folder that contains the custum images, only jpg files are allowed  

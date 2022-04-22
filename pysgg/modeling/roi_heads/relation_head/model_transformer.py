@@ -12,11 +12,12 @@ from .utils_relation import nms_overlaps
 
 class ScaledDotProductAttention(nn.Module):
     ''' Scaled Dot-Product Attention '''
-    def __init__(self, temperature, attn_dropout=0.1):
+    def __init__(self, temperature, attn_dropout=0.1,graph_mask_type='add'):
         super().__init__()
         self.temperature = temperature
         self.dropout = nn.Dropout(attn_dropout)
         self.softmax = nn.Softmax(dim=2)
+        self.graph_mask_type = graph_mask_type
 
     def forward(self, q, k, v, mask=None):
         """
@@ -33,7 +34,21 @@ class ScaledDotProductAttention(nn.Module):
         attn = attn / self.temperature
 
         if mask is not None:
-            attn = attn.masked_fill(mask, -np.inf)
+            if mask.dtype is not torch.bool:
+                # positive value is for rel; -1 for padding;
+                if self.graph_mask_type == 'add':
+                    attn = attn + mask
+                elif self.graph_mask_type == 'mul':
+                    attn = attn * mask
+                # elif self.graph_mask_type == 'none':
+                #     pass
+                else:
+                    pass
+                # fill padding node with -inf
+                fill_mask = mask.lt(0)
+                attn = attn.masked_fill(fill_mask, -np.inf)
+            else:
+                attn = attn.masked_fill(mask, -np.inf)
 
         attn = self.softmax(attn)
         attn = self.dropout(attn)
@@ -160,7 +175,7 @@ class TransformerEncoder(nn.Module):
             EncoderLayer(d_model, d_inner, n_head, d_k, d_v, dropout=dropout)#包括multihead和positionwise
             for _ in range(n_layers)])
 
-    def forward(self, input_feats, num_objs):#由一个encodelayer组成
+    def forward(self, input_feats, num_objs,graph_mask=None):#由一个encodelayer组成
         """
         Args:
             input_feats [Tensor] (#total_box, d_model) : bounding box features of a batch
@@ -170,14 +185,20 @@ class TransformerEncoder(nn.Module):
         """
         original_input_feats = input_feats
         input_feats = input_feats.split(num_objs, dim=0)
-        input_feats = nn.utils.rnn.pad_sequence(input_feats, batch_first=True)
+        input_feats = nn.utils.rnn.pad_sequence(input_feats, batch_first=True)#避免序列长度不均匀
 
         # -- Prepare masks
         bsz = len(num_objs)
         device = input_feats.device
         pad_len = max(num_objs)
         num_objs_ = torch.LongTensor(num_objs).to(device).unsqueeze(1).expand(-1, pad_len)
-        slf_attn_mask = torch.arange(pad_len, device=device).view(1, -1).expand(bsz, -1).ge(num_objs_).unsqueeze(1).expand(-1, pad_len, -1) # (bsz, pad_len, pad_len)
+        if graph_mask is not None:
+            if graph_mask.dtype is not torch.bool:
+                slf_attn_mask = graph_mask
+            else:
+                slf_attn_mask = graph_mask.logical_not()
+        else:
+            slf_attn_mask = torch.arange(pad_len, device=device).view(1, -1).expand(bsz, -1).ge(num_objs_).unsqueeze(1).expand(-1, pad_len, -1) # (bsz, pad_len, pad_len)
         non_pad_mask = torch.arange(pad_len, device=device).to(device).view(1, -1).expand(bsz, -1).lt(num_objs_).unsqueeze(-1) # (bsz, pad_len, 1)
 
         # -- Forward

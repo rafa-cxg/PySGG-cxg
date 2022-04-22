@@ -1006,11 +1006,19 @@ class BGNNContext(nn.Module):
             '''cxg'''
             # relatedness_each_iters = None
             '''cxg'''
-            relatedness_each_iters = torch.stack(
-                [torch.stack(each) for each in relatedness_each_iters]
-            )
+            # relatedness_each_iters = torch.stack(
+            #     [torch.stack(each) for each in relatedness_each_iters]
+            # )
             # bsz, num_obj, num_obj, iter_num
-            relatedness_each_iters = relatedness_each_iters.permute(1, 2, 3, 0)
+            # relatedness_each_iters = relatedness_each_iters.permute(1, 2, 3, 0)
+            tmp=[[] for i in range(len(relatedness_each_iters[0]))]
+            for each in relatedness_each_iters:
+                for idx,image in enumerate(each):
+                    tmp[idx].append(image)
+            relatedness_each_iters=[]
+            for each in tmp:
+                relatedness_each_iters.append(torch.stack(each, -1))
+
 
         else:
             relatedness_each_iters = None

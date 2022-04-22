@@ -58,10 +58,6 @@ class ROIRelationHead(torch.nn.Module):
         # same structure with box head, but different parameters
         # these param will be trained in a slow learning rate, while the parameters of box head will be fixed
         # Note: there is another such extractor in uniton_feature_extractor
-        self.union_feature_extractor = make_roi_relation_feature_extractor(
-            cfg,
-            in_channels,
-        )
         if cfg.MODEL.ATTRIBUTE_ON:
             self.box_feature_extractor = make_roi_box_feature_extractor(
                 cfg, in_channels, half_out=True
@@ -73,11 +69,14 @@ class ROIRelationHead(torch.nn.Module):
         else:
             # the fix features head for extracting the instances ROI features for
             # obj detection
-            self.box_feature_extractor = make_roi_box_feature_extractor(cfg, in_channels,for_relation=True)
+            self.box_feature_extractor = make_roi_box_feature_extractor(cfg, in_channels,for_relation=True)#SEM
             feat_dim = self.box_feature_extractor.out_channels
             if isinstance(self.box_feature_extractor, ResNet50Conv5ROIFeatureExtractor):
                 feat_dim = self.box_feature_extractor.flatten_out_channels
-
+        self.union_feature_extractor = make_roi_relation_feature_extractor(  # LMM
+            cfg,
+            in_channels,
+        )
         self.predictor = make_roi_relation_predictor(cfg, feat_dim)
         self.post_processor = make_roi_relation_post_processor(cfg)
         self.loss_evaluator = make_roi_relation_loss_evaluator(cfg)
@@ -251,8 +250,9 @@ class ROIRelationHead(torch.nn.Module):
             union_features,#tensor
             logger,
         )# 计算loss:RelAwareLoss. add_losses包括3个，分别对应3个iteration的predict预测loss
-        relation_logits=list(relation_logits)
-        if self.cfg.MODEL.TWO_STAGE_ON:
+        if relation_logits!=None:relation_logits=list(relation_logits)
+        #----------------------add EEM on relation logits------------------#
+        if self.cfg.MODEL.TWO_STAGE_ON and relation_logits!=None:#当 relation_logits为none的时候，说明是SHA模型
             # twostage_roi_features = twostage.box_feature_extractor(features, proposals)
             # twostage_union_feature=twostage.union_feature_extractor(features, proposals, rel_pair_idxs)
             # two_stage_logits = twostage.two_stage_predictor(  # twostagePredictor，
@@ -302,28 +302,28 @@ class ROIRelationHead(torch.nn.Module):
 
 
             return roi_features, result, {}
-        if self.cfg.MODEL.TRAIN_FIRST_STAGE_ONLY == False:#是否单训第一阶段
-
-
-            loss_relation, loss_refine = self.loss_evaluator(#RelationLossComputation loss_refine指的是object的loss
-            proposals, rel_labels, relation_logits, obj_refine_logits
-            )
-
+        if self.cfg.MODEL.TRAIN_FIRST_STAGE_ONLY == False :#是否单训第一阶段
             output_losses = dict()
-            if self.cfg.MODEL.ATTRIBUTE_ON and isinstance(loss_refine, (list, tuple)):
-                output_losses = dict(
-                    loss_rel=loss_relation,
-                    loss_refine_obj=loss_refine[0],
-                    loss_refine_att=loss_refine[1],
+            if relation_logits != None:
+                loss_relation, loss_refine = self.loss_evaluator(#RelationLossComputation loss_refine指的是object的loss
+                proposals, rel_labels, relation_logits, obj_refine_logits
                 )
-            else:
-                if self.pass_obj_recls_loss:#predcls:false output_losses:{}
-                    output_losses = dict(loss_rel=loss_relation, loss_refine_obj=loss_refine)
-                else:#default
-                    output_losses = dict(loss_rel=loss_relation)
 
-            if rel_pn_loss is not None:
-                output_losses["loss_relatedness"] = rel_pn_loss
+
+                if self.cfg.MODEL.ATTRIBUTE_ON and isinstance(loss_refine, (list, tuple)):
+                    output_losses = dict(
+                        loss_rel=loss_relation,
+                        loss_refine_obj=loss_refine[0],
+                        loss_refine_att=loss_refine[1],
+                    )
+                else:
+                    if self.pass_obj_recls_loss:#predcls:false output_losses:{}
+                        output_losses = dict(loss_rel=loss_relation, loss_refine_obj=loss_refine)
+                    else:#default
+                        output_losses = dict(loss_rel=loss_relation)
+
+                if rel_pn_loss is not None:
+                    output_losses["loss_relatedness"] = rel_pn_loss
 
             output_losses.update(add_losses)#有rel的loss,也有4个iter的rel loss， 包括loss_rel和3个iter loss('pre_rel_classify_loss_iter-0'):属于rel_proposal_network部分
             output_losses_checked = {}#check whether loss is none
