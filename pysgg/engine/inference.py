@@ -31,7 +31,8 @@ def compute_on_dataset(model, data_loader, device, synchronize_gather=True, time
     for _, batch in enumerate(tqdm(data_loader)):#这就是总数2500的地方
         # torch.cuda.empty_cache()
         with torch.no_grad():
-            images, targets, image_ids = batch
+            images, targets, image_ids,image_paths = batch
+            targets[0].add_field('image_paths', image_paths)
             targets = [target.to(device) for target in targets]
             if timer:
                 timer.tic()

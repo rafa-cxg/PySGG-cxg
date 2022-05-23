@@ -170,7 +170,7 @@ class TransLike_GCL(nn.Module):
 
         if self.training:
             if not self.config.MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL:
-                fg_labels = cat([proposal.get_field("labels") for proposal in proposals], dim=0)
+                fg_labels = cat([proposal.get_field("labels") for proposal in proposals], dim=0)#fg_label is object label
                 loss_refine_obj = self.criterion_loss(obj_dists, fg_labels.long())
                 add_losses['obj_loss'] = loss_refine_obj
 
@@ -254,16 +254,16 @@ class TransLike_GCL(nn.Module):
                         if self.use_bias:
                             rel_bias_bef = self.freq_bias_all[jbef]
                             group_output_bef = group_output_bef + rel_bias_bef.index_with_labels(group_pairs.long())
-                        if self.use_EEM:
-                            mask = self.pre_group_matrix[jbef].ge(1)  # only perserve valid group categories
-                            mask[0] = True
-                            if max_label != 0:
-                                actual_group_eem_logits = torch.masked_select(two_stage_logits[cur_chosen_matrix[i]],
-                                                                              mask).view(group_label.shape[0], -1)
-                            else:
-                                actual_group_eem_logits = torch.masked_select(two_stage_logits,
-                                                                              mask).view(group_label.shape[0], -1)
-                            group_output_bef = group_output_bef + actual_group_eem_logits
+                        # if self.use_EEM:
+                        #     mask = self.pre_group_matrix[jbef].ge(1)  # only perserve valid group categories
+                        #     mask[0] = True
+                        #     if max_label != 0:
+                        #         actual_group_eem_logits = torch.masked_select(two_stage_logits[cur_chosen_matrix[i]],
+                        #                                                       mask).view(group_label.shape[0], -1)
+                        #     else:
+                        #         actual_group_eem_logits = torch.masked_select(two_stage_logits,
+                        #                                                       mask).view(group_label.shape[0], -1)
+                        #     group_output_bef = group_output_bef + actual_group_eem_logits
                         max_vector = self.max_elemnt_list[jbef] + 1
 
                         if self.no_relation_restrain:
@@ -287,16 +287,16 @@ class TransLike_GCL(nn.Module):
                         if self.use_bias:
                             rel_bias_bef = self.freq_bias_all[jbef]
                             group_output_bef = group_output_bef + rel_bias_bef.index_with_labels(group_pairs.long())
-                        if self.use_EEM:
-                            mask = self.pre_group_matrix[jbef].ge(1)  # only perserve valid group categories
-                            mask[0] = True
-                            if max_label != 0:
-                                actual_group_eem_logits = torch.masked_select(two_stage_logits[cur_chosen_matrix[i]],
-                                                                              mask).view(group_label.shape[0], -1)
-                            else:
-                                actual_group_eem_logits = torch.masked_select(two_stage_logits,
-                                                                              mask).view(group_label.shape[0], -1)
-                            group_output_bef = group_output_bef + actual_group_eem_logits
+                        # if self.use_EEM:
+                        #     mask = self.pre_group_matrix[jbef].ge(1)  # only perserve valid group categories
+                        #     mask[0] = True
+                        #     if max_label != 0:
+                        #         actual_group_eem_logits = torch.masked_select(two_stage_logits[cur_chosen_matrix[i]],
+                        #                                                       mask).view(group_label.shape[0], -1)
+                        #     else:
+                        #         actual_group_eem_logits = torch.masked_select(two_stage_logits,
+                        #                                                       mask).view(group_label.shape[0], -1)
+                        #     group_output_bef = group_output_bef + actual_group_eem_logits
                         max_vector = self.max_elemnt_list[jbef] + 1
 
                         if self.no_relation_restrain:
@@ -1280,10 +1280,13 @@ class BGNNPredictor(nn.Module):
         # freq
         if self.use_bias:
             statistics = get_dataset_statistics(config)
-            self.freq_bias = FrequencyBias(config, statistics)
-            self.freq_lambda = nn.Parameter(
-                torch.Tensor([1.0]), requires_grad=False
-            )  # hurt performance when set learnable
+            if cfg.MODEL.ROI_RELATION_HEAD.BIAS_MODULE.USE_PENALTY:
+                self.bias_module = build_bias_module(config, statistics)
+            else:
+                self.freq_bias = FrequencyBias(config, statistics)
+                self.freq_lambda = nn.Parameter(
+                    torch.Tensor([1.0]), requires_grad=False
+                )  # hurt performance when set learnable
 
         self.init_classifier_weight()
 
@@ -1388,10 +1391,22 @@ class BGNNPredictor(nn.Module):
                     torch.stack((obj_pred[pair_idx[:, 0]], obj_pred[pair_idx[:, 1]]), dim=1)
                 )
             pair_pred = cat(pair_preds, dim=0)
-            rel_cls_logits = (
-                rel_cls_logits #torch.Size([2006, 51]),predcls:[128,51]
-                + self.freq_lambda * self.freq_bias.index_with_labels(pair_pred.long())#搞什么embedding?什么ststics? self.freq_bias.index_with_labels(pair_pred.long())：[4096,51]
-            )
+            if self.use_bias and cfg.MODEL.ROI_RELATION_HEAD.BIAS_MODULE.USE_PENALTY != True:
+                rel_cls_logits = (
+                        rel_cls_logits  # torch.Size([2006, 51]),predcls:[128,51]
+                        + self.freq_lambda * self.freq_bias.index_with_labels(pair_pred.long())
+                    # 搞什么embedding?什么ststics? self.freq_bias.index_with_labels(pair_pred.long())：[4096,51]
+                )
+            else:  # apply RTPB module
+                gt = torch.cat(rel_labels, dim=0) if rel_labels is not None else None
+                bias = self.bias_module.index_with_labels(pair_pred.long(), gt=gt)
+                if bias is not None:
+                    rel_cls_logits = (
+                            rel_cls_logits  # torch.Size([2006, 51]),predcls:[128,51]
+                            + bias
+                        # 搞什么embedding?什么ststics? self.freq_bias.index_with_labels(pair_pred.long())：[4096,51]
+                    )
+
 
         obj_pred_logits = obj_pred_logits.split(num_objs, dim=0)#list of [num_prop,151] predcls用的gt值
         rel_cls_logits = rel_cls_logits.split(num_rels, dim=0)
@@ -1759,10 +1774,13 @@ class MotifPredictor(nn.Module):
         )
         assert self.obj_recls_logits_update_manner in ["replace", "add"]
 
-        if self.use_bias:
+        if self.use_bias: #todo 检查是否可以把motif.py中的FrequencyBias 和 build_bias_module合并
             # convey statistics into FrequencyBias to avoid loading again
-            self.freq_bias = FrequencyBias(config, statistics)
-
+            # RTPB
+            if cfg.MODEL.ROI_RELATION_HEAD.BIAS_MODULE.USE_PENALTY:
+                self.bias_module = build_bias_module(config, statistics)
+            else:
+                self.freq_bias = FrequencyBias(config, statistics)  # normal bias
     def init_classifier_weight(self):
         self.rel_compress.reset_parameters()
 
@@ -1847,8 +1865,13 @@ class MotifPredictor(nn.Module):
 
         rel_dists = self.rel_compress(prod_rep)
 
-        if self.use_bias:
+        if self.use_bias and cfg.MODEL.ROI_RELATION_HEAD.BIAS_MODULE.USE_PENALTY!=True:
             rel_dists = rel_dists + self.freq_bias.index_with_labels(pair_pred.long())
+        else:# apply RTPB module
+            gt = torch.cat( rel_labels, dim=0) if rel_labels is not None else None
+            bias = self.bias_module.index_with_labels(pair_pred.long(), gt=gt)
+            if bias is not None:
+                rel_dists = rel_dists + bias
 
         obj_dists = obj_dists.split(num_objs, dim=0)
         rel_dists = rel_dists.split(num_rels, dim=0)
@@ -3180,6 +3203,7 @@ class CausalAnalysisPredictor(nn.Module):
         self.separate_spatial = config.MODEL.ROI_RELATION_HEAD.CAUSAL.SEPARATE_SPATIAL
         self.use_vtranse = config.MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER == "vtranse"
         self.use_bgnn = config.MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER == "bgnn"
+        self.use_sha = config.MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER == "sha"
         self.effect_type = config.MODEL.ROI_RELATION_HEAD.CAUSAL.EFFECT_TYPE
 
         assert in_channels is not None
@@ -3201,7 +3225,8 @@ class CausalAnalysisPredictor(nn.Module):
             self.context_layer = VTransEFeature(config, obj_classes, rel_classes, in_channels)
         elif config.MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER == "bgnn":
             self.context_layer = bgnn_causal_Context(config, in_channels)
-
+        elif config.MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER == "sha":
+            self.context_layer = SHA_Context(config, obj_classes, rel_classes, in_channels)
         else:
             print("ERROR: Invalid Context Layer")
             assert False
@@ -3257,6 +3282,11 @@ class CausalAnalysisPredictor(nn.Module):
 
         # convey statistics into FrequencyBias to avoid loading again
         self.freq_bias = FrequencyBias(config, statistics)
+        # if config.GLOBAL_SETTING.USE_BIAS and cfg.MODEL.ROI_RELATION_HEAD.BIAS_MODULE.USE_PENALTY:
+        #     self.freq_bias = build_bias_module(config, statistics)
+        # else:
+        #     self.freq_bias = FrequencyBias(config, statistics)
+
 
         # add spatial emb for visual feature
         if self.spatial_for_vision:
@@ -3330,6 +3360,9 @@ class CausalAnalysisPredictor(nn.Module):
             obj_dists, obj_preds, edge_ctx, binary_preds = self.context_layer(
                 roi_features,union_features, proposals, rel_pair_idxs,rel_binarys,logger=logger, ctx_average=ctx_average
             )
+        elif self.cfg.MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER=='sha':
+            obj_dists, obj_preds, edge_ctx = self.context_layer(roi_features, proposals, logger, ctx_average=ctx_average)
+            binary_preds=None
         else:
             obj_dists, obj_preds, edge_ctx, binary_preds = self.context_layer(
                 roi_features, proposals, rel_pair_idxs, logger, ctx_average=ctx_average

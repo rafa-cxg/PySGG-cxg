@@ -99,7 +99,6 @@ class SHA_Encoder(nn.Module):
     def forward(self, visual_feats, text_feats, num_objs):
         visual_output = visual_feats
         textual_output = text_feats
-
         for enc_layer in self.cross_module:
             visual_output, textual_output = enc_layer(visual_output, textual_output, num_objs)
 
@@ -157,8 +156,21 @@ class SHA_Context(nn.Module):
 
         self.context_obj = SHA_Encoder(config, self.obj_layer)
         self.context_edge = SHA_Encoder(config, self.edge_layer)
+        ######## config for TDE #############################
+        self.average_ratio = 0.0005
+        self.effect_analysis = config.MODEL.ROI_RELATION_HEAD.CAUSAL.EFFECT_ANALYSIS
 
-    def forward(self, roi_features, proposals, logger=None):
+        if self.effect_analysis:
+            self.register_buffer("untreated_obj_feat",
+                                 torch.zeros(self.obj_dim  + 128 + self.language_obj_dim))
+            self.register_buffer("untreated_edg_feat",
+                                 torch.zeros(512 + self.obj_dim + self.language_obj_dim))
+    def moving_average(self, holder, input):
+        assert len(input.shape) == 2
+        with torch.no_grad():
+            holder = holder * (1 - self.average_ratio) + self.average_ratio * input.mean(0).view(-1)
+        return holder
+    def forward(self, roi_features, proposals, logger=None, ctx_average=False):#ctx_average means not use TDE
         # labels will be used in DecoderRNN during training
         use_gt_label = self.training or self.cfg.MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL
         obj_labels = cat([proposal.get_field("labels") for proposal in proposals], dim=0) if use_gt_label else None
@@ -178,18 +190,28 @@ class SHA_Context(nn.Module):
         # encode objects with transformer
 
         num_objs = [len(p) for p in proposals]
-        obj_pre_rep_vis = cat((roi_features, pos_embed), -1)
+        batch_size = roi_features.shape[0]
+        if (ctx_average) and self.effect_analysis and (not self.training):
+            obj_pre_rep_vis = self.untreated_obj_feat.view(1, -1).expand(batch_size, -1)
+
+        else:
+            obj_pre_rep_vis = cat((roi_features, pos_embed), -1)
+        if self.training and self.effect_analysis:
+            self.untreated_obj_feat = self.moving_average(self.untreated_obj_feat, obj_pre_rep_vis)
         obj_pre_rep_vis = self.lin_obj_visual(obj_pre_rep_vis)
         obj_pre_rep_txt = obj_embed
         obj_pre_rep_txt = self.lin_obj_textual(obj_pre_rep_txt)
-        obj_feats_vis, _, = self.context_obj(obj_pre_rep_vis, obj_pre_rep_txt, num_objs)
+        obj_feats_vis, _, = self.context_obj(obj_pre_rep_vis, obj_pre_rep_txt, num_objs)#不需要ctx_avg，因为没有decoder结构
         obj_feats = obj_feats_vis
 
+        if (ctx_average) and self.effect_analysis and (not self.training):
+            edge_pre_rep_vis = self.untreated_edg_feat.view(1, -1).expand(batch_size, -1)
+        else:
+            edge_pre_rep_vis = cat((roi_features, obj_feats), dim=-1)
         # predict obj_dists and obj_preds
         if self.mode == 'predcls':
             obj_preds = obj_labels
             obj_dists = to_onehot(obj_preds, self.num_obj_cls)
-            edge_pre_rep_vis = cat((roi_features, obj_feats), dim=-1)
             edge_pre_rep_txt = self.obj_embed2(obj_labels)
         else:
             obj_dists = self.out_obj(obj_feats)
@@ -199,14 +221,16 @@ class SHA_Context(nn.Module):
                 obj_preds = self.nms_per_cls(obj_dists, boxes_per_cls, num_objs)
             else:
                 obj_preds = obj_dists[:, 1:].max(1)[1] + 1
-            edge_pre_rep_vis = cat((roi_features, obj_feats), dim=-1)
             edge_pre_rep_txt = self.obj_embed2(obj_preds)
-
+        if self.training and self.effect_analysis:
+            self.untreated_edg_feat = self.moving_average(self.untreated_edg_feat, edge_pre_rep_vis)
         # edge context
         edge_pre_rep_vis = self.lin_edge_visual(edge_pre_rep_vis)
         edge_pre_rep_txt = self.lin_edge_textual(edge_pre_rep_txt)
         edge_ctx_vis, _ = self.context_edge(edge_pre_rep_vis, edge_pre_rep_txt, num_objs)
         edge_ctx = edge_ctx_vis
+        # memorize average feature
+
 
         return obj_dists, obj_preds, edge_ctx
 

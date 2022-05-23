@@ -387,10 +387,10 @@ def train(
     if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_BOX:
         if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL:
             mode = "predcls"
-            recall_highest_setting = 0.29  # 暂时
+            recall_highest_setting = 0.08  # 暂时
         else:
             mode = "sgcls"
-            recall_highest_setting = 0.08#0.15
+            recall_highest_setting = 0.06#0.15
     else:
         mode = "sgdet"
         recall_highest_setting = 0.05#0.1715  # 暂时
@@ -436,7 +436,7 @@ def train(
         #     if key=='loss_two_stage':
         #         loss_dict['loss_two_stage']=scalar.squeeze()*loss_dict['loss_two_stage']
 
-        if  cfg.MODEL.ROI_RELATION_HEAD.REL_OBJ_MULTI_TASK_LOSS:
+        if  cfg.MODEL.ROI_RELATION_HEAD.REL_OBJ_MULTI_TASK_LOSS and mode != "predcls":
             losses =  sum(
                 loss for loss in loss_dict.values())-0.5*loss_dict['loss_refine_obj']
         else:
@@ -572,7 +572,15 @@ def train(
         # https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate
         # torch.cuda.empty_cache()
         if iteration % checkpoint_period == 0 and val_result_value>recall_highest_setting:#checkpoint_period=2000
+            #删除老的checkpoint
+            filelist = os.listdir(checkpointer.save_dir)
+            for pth in filelist:
+                if '.pth' in pth:
+                    del_file = checkpointer.save_dir + '/' + pth
+                    os.remove(del_file)
+                    print("delete old checkpoint：", del_file)
             checkpointer.save("model_{:07d}".format(iteration), **arguments)
+            ###########################
             print("model_{:07d} beyond recall@100: recall_highest_setting".format(iteration,recall_highest_setting))
             recall_highest_setting=val_result_value
         if iteration == max_iter and val_result_value>recall_highest_setting:
@@ -629,9 +637,9 @@ def run_val(cfg, model, val_data_loaders, distributed, logger):
     if distributed:
         model = model.module
 
-    iou_types = ()
-    # if mode=="sgdet":
-    #     iou_types = ("bbox",)
+    iou_types =()
+    if mode!="predcls" and cfg.MODEL.ROI_RELATION_HEAD.OBJECT_CLASSIFICATION_REFINE:
+        iou_types = ("bbox",)
     if cfg.MODEL.MASK_ON:
         iou_types = iou_types + ("segm",)
     if cfg.MODEL.KEYPOINT_ON:

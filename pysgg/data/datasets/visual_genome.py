@@ -199,7 +199,7 @@ class VGDataset(torch.utils.data.Dataset):
             else:
                 img, target = self.transforms(img, target)
 
-        return img, target, index
+        return img, target, index,self.filenames[index]
 
     def get_statistics(self):
         fg_matrix, bg_matrix, rel_counter_init = get_VG_statistics(self,
@@ -599,11 +599,12 @@ def load_graphs(roidb_file, split, num_im, num_val_im, filter_empty_rels, filter
 
         if i_rel_start >= 0:
             predicates = _relation_predicates[i_rel_start: i_rel_end + 1]
-            # we rearrange the order of the label, from the predicate who owns maximum training samples to the fewer
-            new_pre_list = []
-            for pre_raw in predicates:
-                new_pre_list.append(predicate_new_order[pre_raw])
-            predicates = new_pre_list
+            if  cfg.GLOBAL_SETTING.USE_GCL:
+                # we rearrange the order of the label, from the predicate who owns maximum training samples to the fewer
+                new_pre_list = []
+                for pre_raw in predicates:
+                    new_pre_list.append(predicate_new_order[pre_raw])
+                predicates = new_pre_list
             obj_idx = _relations[i_rel_start: i_rel_end
                                  + 1] - i_obj_start  # range is [0, num_box)
             assert np.all(obj_idx >= 0)

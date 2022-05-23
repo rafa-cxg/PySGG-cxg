@@ -4,3 +4,12 @@
 /pysgg.egg-info/
 /pysgg/csrc/
 /datasets/vg/
+/bgnn_base_human_sgdet.txt
+/bgnn_base_sgdet.txt
+/bgnn_bls.txt
+/bgnn_bls_human.txt
+/bgnn_bls_human_sgcls.txt
+/bgnn_bls_rtpb.txt
+/bgnn_bls_sgcls.txt
+/command.txt
+/draw_graph.py

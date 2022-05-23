@@ -230,7 +230,7 @@ class ROIRelationHead(torch.nn.Module):
             roi_features = torch.cat((roi_features, att_features), dim=-1)
 
         if self.use_union_box:#yes
-            union_features = self.union_feature_extractor(features, proposals, rel_pair_idxs)#union包括所有的N!组合
+            union_features = self.union_feature_extractor(features, proposals,targets, rel_pair_idxs)#union包括所有的N!组合
         else:
             union_features = None
 

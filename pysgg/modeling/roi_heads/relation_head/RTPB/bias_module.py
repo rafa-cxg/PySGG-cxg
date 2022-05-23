@@ -74,7 +74,7 @@ class PenaltyModule(nn.Module):
             loaded_data = torch.clamp(loaded_data, min=self.eps)
             self.penalty_bias_2 = torch.log(loaded_data)
         elif 'count_bias' == self.penalty_type:
-            dist = counts / counts.sum()
+            dist = counts.float() / counts.sum()#todo cxg:增加数据类型转换
             dist[0] = 1
             if self.scale_weight != 1:
                 dist = dist.pow(self.scale_weight)

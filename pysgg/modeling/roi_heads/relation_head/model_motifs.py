@@ -299,9 +299,9 @@ class LSTMContext(nn.Module):
 
         if self.effect_analysis:
             self.register_buffer("untreated_dcd_feat",
-                                 torch.zeros(self.hidden_dim + self.obj_dim + self.embed_dim + 128))
+                                 torch.zeros(self.hidden_dim + self.obj_dim + self.embed_dim + 128+self.language_obj_dim))#dcd means 'decoder input'
             self.register_buffer("untreated_obj_feat", torch.zeros(self.obj_dim + self.embed_dim + 128+self.language_obj_dim))
-            self.register_buffer("untreated_edg_feat", torch.zeros(self.embed_dim + self.obj_dim))
+            self.register_buffer("untreated_edg_feat", torch.zeros(self.embed_dim + self.obj_dim+self.language_obj_dim))
 
     def sort_rois(self, proposals):
         c_x = center_x(proposals)
@@ -394,7 +394,7 @@ class LSTMContext(nn.Module):
 
         batch_size = x.shape[0]
         if all_average and self.effect_analysis and (not self.training):
-            obj_pre_rep = self.untreated_obj_feat.view(1, -1).expand(batch_size, -1)
+            obj_pre_rep = self.untreadcdted_obj_feat.view(1, -1).expand(batch_size, -1)
         else:
             obj_pre_rep = cat((x, obj_embed, pos_embed), -1)
 
@@ -416,7 +416,7 @@ class LSTMContext(nn.Module):
         # obj_embed2 = F.softmax(obj_dists, dim=1) @ self.obj_embed2.weight
 
 
-        if (all_average or ctx_average) and self.effect_analysis and (not self.training):
+        if (all_average or ctx_average) and self.effect_analysis and (not self.training):#TODO all_average只是针对获得ctx feature前的feature是否avg,但它似乎始终是FALSE，需要删除吗
             obj_rel_rep = cat((self.untreated_edg_feat.view(1, -1).expand(batch_size, -1), obj_ctx), dim=-1)#untreated_edg_feat前面进行了初始化为0
         else:
             obj_rel_rep = cat((obj_embed2, x, obj_ctx), -1)
