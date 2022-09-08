@@ -7,6 +7,7 @@ Our paper [Biasing like human: a cognitive bias framework for scene graph genera
 <!-- (https://arxiv.org/abs/2104.00308) -->
 We also announce a new scene graph branchmark as replacement of scene-graph-brenchmark and PySGG. There
 are following updating:
+- fix PYSGG bug that always map box.weight to relation.weight, even checkpoint is given (vision ) 
 - Add more state of art methods: Dual-Transformer, SHA, C-bias
 - Allowing batch size more than one in test/val phrase (fixed from PySGG).
 - fix truncate image error problem.
