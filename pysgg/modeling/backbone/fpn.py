@@ -33,7 +33,7 @@ class FPN(nn.Module):
             if in_channels == 0:
                 continue
             inner_block_module = conv_block(in_channels, out_channels, 1)
-            layer_block_module = conv_block(out_channels, out_channels, 3, 1)
+            layer_block_module = conv_block(out_channels, out_channels, 3, 1)#融合后的3*3卷积
             self.add_module(inner_block, inner_block_module)
             self.add_module(layer_block, layer_block_module)
             self.inner_blocks.append(inner_block)

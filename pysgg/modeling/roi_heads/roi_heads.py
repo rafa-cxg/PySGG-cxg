@@ -23,7 +23,7 @@ class CombinedROIHeads(torch.nn.ModuleDict):
         if cfg.MODEL.KEYPOINT_ON and cfg.MODEL.ROI_KEYPOINT_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
             self.keypoint.feature_extractor = self.box.feature_extractor
 
-    def forward(self, features, proposals, targets=None, logger=None):
+    def forward(self, features,relation_features, proposals, targets=None, logger=None):
         losses = {}
         '''x:torch.Size([960, 4096])是nms筛选后的proposal feature.960=12*80
         如果是predcls:x:torch.Size([num_gt_allimage, 4096])  proposals:每个图片有1000+gt个 box '''
@@ -76,7 +76,7 @@ class CombinedROIHeads(torch.nn.ModuleDict):
             # with torch.no_grad():
             if self.cfg.MODEL.TWO_STAGE_ON==False:
                 sampling={}
-            x, detections, loss_relation = self.relation(features=features, proposal=detections, targets=targets, logger=logger,**sampling)#ROIRelationHead:在这里proposal被采样.x:roi_feature[all_prop,4096]. detections:proposal
+            x, detections, loss_relation = self.relation(features=features, relation_features=relation_features,proposal=detections, targets=targets, logger=logger,**sampling)#ROIRelationHead:在这里proposal被采样.x:roi_feature[all_prop,4096]. detections:proposal
             if loss_relation !=None:#不单独训第一阶段
                 losses.update(loss_relation)#此时Loss还没包含任何内容
 

@@ -105,6 +105,7 @@ class ROIBoxHead(torch.nn.Module):
         # Original box head (relation_on = False)
         #####################################################################
         if self.training:
+
             # Faster R-CNN subsamples during training the proposals with a fixed
             # positive / negative ratio
             with torch.no_grad():

@@ -14,7 +14,7 @@ class FrequencyBias_GCL(nn.Module):
     predicate_all_list[31]=5，以此类推
     '''
 
-    def __init__(self, cfg, statistics, Dataset_choice, eps=1e-3, predicate_all_list=None):
+    def __init__(self, cfg, statistics, Dataset_choice, eps=1e-3, predicate_all_list=None):#eg: predicate_all_list: [0,1,2,3....0,0,0]
         super(FrequencyBias_GCL, self).__init__()
         assert predicate_all_list is not None
 
@@ -35,7 +35,7 @@ class FrequencyBias_GCL(nn.Module):
                 lines = lines + 1
         assert lines == self.num_rel_cls
 
-        pred_dist = np.log(fg_matrix / fg_matrix.sum(2)[:, :, None] + eps)
+        pred_dist = np.log(fg_matrix / fg_matrix.sum(2)[:, :, None] + eps)#在当前组中，重新统计distribution
 
         '''以下是原函数，以上是我改的部分'''
         # pred_dist = statistics['pred_dist'].float()

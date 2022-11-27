@@ -170,7 +170,7 @@ class PostProcessor(nn.Module):
             boxlist.add_field('rel_pair_idxs', rel_pair_idx)  # (#rel, 2)
             boxlist.add_field('pred_rel_scores', rel_class_prob)  # (#rel, #rel_class)
             boxlist.add_field('pred_rel_labels', rel_labels)  # (#rel, )
-
+            boxlist.add_field('freq_logits', box.get_field('freq_logits'))
             if two_stage_pred_rel_logit != None:
                 boxlist.add_field('two_stage_pred_rel_prob', rel_2stage_class_prob)
                 boxlist.add_field('rel_2stage_pair_idx', rel_2stage_pair_idx)
@@ -182,6 +182,7 @@ class PostProcessor(nn.Module):
             # the boxlist has such an element, the slicing operation should be forbidden.)
             # it is not safe to add fields about relation into boxlist!
             results.append(boxlist)
+
         return results
 
 

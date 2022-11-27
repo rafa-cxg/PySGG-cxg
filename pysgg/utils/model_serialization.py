@@ -42,7 +42,7 @@ def align_and_update_state_dicts(model_state_dict, loaded_state_dict, load_mappi
     )
     max_match_size, idxs = match_matrix.max(1)
     # remove indices that correspond to no-match
-    idxs[max_match_size == 0] = -1
+    idxs[max_match_size == 0] = -1 #idxs矩阵对应位置如果是-1代表model和load的key名字不匹配，否则idx的行列编号就是两者对应编号
 
     # used for logging
     max_size = max([len(key) for key in current_keys]) if current_keys else 1
@@ -53,12 +53,15 @@ def align_and_update_state_dicts(model_state_dict, loaded_state_dict, load_mappi
             key = current_keys[idx_new]
             logger.info("NO-MATCHING of current module: {} of shape {}".format(key, 
                                     tuple(model_state_dict[key].shape)))
-            continue
+            continue #跳过，不进行后续的加载
         key = current_keys[idx_new]
-        if model_state_dict[key].shape != loaded_state_dict[key].shape:
-            logger.info("SIZE-MISMTCHING of current module: {} of shape {}".format(key,
-                                                                               tuple(model_state_dict[key].shape)))
-            continue
+        try:
+            if model_state_dict[key].shape != loaded_state_dict[key].shape:
+                logger.info("SIZE-MISMTCHING of current module: {} of shape {}".format(key,
+                                                                                   tuple(model_state_dict[key].shape)))
+                continue
+        except:
+            pass
 
         key_old = loaded_keys[idx_old]
         model_state_dict[key] = loaded_state_dict[key_old]
@@ -94,8 +97,9 @@ def load_state_dict(model, loaded_state_dict, load_mapping):
     align_and_update_state_dicts(model_state_dict, loaded_state_dict, load_mapping)
 
     # use strict loading
+
     try:
-        model.load_state_dict(model_state_dict, strict=False)
+        model.load_state_dict(model_state_dict, strict=False)#此时的model_state_dict,根据align_and_update_state_dicts把匹配的数据放置在相应key下了
     except(RuntimeError):#从baseline checkpoint 转换到训练congitive bias
         print('remove baseline layers mismatch')
         for k in list(model_state_dict.keys()):

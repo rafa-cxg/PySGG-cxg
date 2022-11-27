@@ -43,12 +43,42 @@ class IMPContext(nn.Module):
         self.obj_vert_w_fc = nn.Sequential(make_fc(hidden_dim * 2, 1), nn.Sigmoid())
         self.out_edge_w_fc = nn.Sequential(make_fc(hidden_dim * 2, 1), nn.Sigmoid())
         self.in_edge_w_fc = nn.Sequential(make_fc(hidden_dim * 2, 1), nn.Sigmoid())
+        # untreated average features
+        self.average_ratio = 0.0005
+        self.effect_analysis = config.MODEL.ROI_RELATION_HEAD.CAUSAL.EFFECT_ANALYSIS
+        # untreated average features
+        self.effect_analysis = config.MODEL.ROI_RELATION_HEAD.CAUSAL.EFFECT_ANALYSIS
+        if self.effect_analysis:
+            self.embed_dim = self.cfg.MODEL.ROI_RELATION_HEAD.EMBED_DIM
+            self.obj_dim = in_channels
+            if self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ:
+                self.language_obj_dim=512
+            else:
+                self.language_obj_dim=0
+            self.register_buffer("untreated_obj_feat",
+                                 torch.zeros( self.obj_dim+self.language_obj_dim))
+            self.register_buffer("untreated_edg_feat",
+                                 torch.zeros( self.cfg.MODEL.ROI_RELATION_HEAD.CONTEXT_POOLING_DIM))
 
-    def forward(self, inst_features, proposals, union_features, rel_pair_idxs, logger=None):
+    def moving_average(self, holder, input):
+        assert len(input.shape) == 2
+        with torch.no_grad():
+            holder = holder * (1 - self.average_ratio) + self.average_ratio * input.mean(0).view(-1)
+        return holder
+
+    def forward(self, inst_features, proposals, union_features, rel_pair_idxs, logger=None,ctx_average=False):
         num_objs = [len(b) for b in proposals]
+        batch_size = inst_features.shape[0]
+        rel_batch_size = union_features.shape[0]
+        if (not self.training) and self.effect_analysis and ctx_average:
+            roi_input = self.untreated_obj_feat.view(1, -1).expand(batch_size, -1)
+            uni_input = self.untreated_edg_feat.view(1, -1).expand(rel_batch_size, -1)
 
-        augment_obj_feat, rel_feats = self.pairwise_feature_extractor(inst_features, union_features,
-                                                                      proposals, rel_pair_idxs, )
+        else:
+            roi_input=inst_features
+            uni_input=union_features
+        augment_obj_feat, rel_feats = self.pairwise_feature_extractor(roi_input, uni_input,
+                                                                      proposals, rel_pair_idxs)
 
         obj_rep = self.obj_unary(augment_obj_feat)
         rel_rep = F.relu(self.edge_unary(rel_feats))
@@ -104,7 +134,9 @@ class IMPContext(nn.Module):
             pre_in = self.in_edge_w_fc(torch.cat((obj_vert, edge_factor[i]), 1)) * edge_factor[i]
             vert_ctx = sub2rel @ pre_out + obj2rel @ pre_in
             vert_factor.append(self.node_gru(vert_ctx, vert_factor[i]))
-
+        if self.training and self.effect_analysis:
+            self.untreated_obj_feat = self.moving_average(self.untreated_obj_feat, inst_features)
+            self.untreated_edg_feat = self.moving_average(self.untreated_edg_feat, union_features)
         return vert_factor[-1], edge_factor[-1]
 
 
@@ -219,13 +251,8 @@ class PairwiseFeatureExtractor(nn.Module):
                 make_fc(self.hidden_dim + self.obj_dim + self.embed_dim, self.pooling_dim),
                 nn.ReLU(inplace=True),
             )
-        # untreated average features
 
-    def moving_average(self, holder, input):
-        assert len(input.shape) == 2
-        with torch.no_grad():
-            holder = holder * (1 - self.average_ratio) + self.average_ratio * input.mean(0).view(-1)
-        return holder
+
 
     def pairwise_rel_features(self, augment_obj_feat, union_features, rel_pair_idxs, inst_proposals):
         obj_boxs = [get_box_info(p.bbox, need_norm=True, proposal=p) for p in inst_proposals]
@@ -259,7 +286,7 @@ class PairwiseFeatureExtractor(nn.Module):
 
         return obj_pair_feat4rel_rep
 
-    def forward(self, inst_roi_feats, union_features, inst_proposals, rel_pair_idxs, ):
+    def forward(self, inst_roi_feats, union_features, inst_proposals, rel_pair_idxs):
         """
 
         :param inst_roi_feats: instance ROI features, list(Tensor)
@@ -288,6 +315,7 @@ class PairwiseFeatureExtractor(nn.Module):
 
         # word embedding refine
         batch_size = inst_roi_feats.shape[0]
+
         if self.word_embed_feats_on:
             obj_pre_rep = cat((inst_roi_feats, obj_embed_by_pred_dist, pos_embed), -1)#4096,200,128.resentation:visual-word_embedding-位置编码
         else:
@@ -309,7 +337,6 @@ class PairwiseFeatureExtractor(nn.Module):
         if self.word_embed_feats_on:
             obj_embed_by_pred_labels = self.obj_embed_on_pred_label(obj_pred_labels.long())
 
-        # average action in test phrase for causal effect analysis#todo 感觉下面的是多余的处理？？
         if self.word_embed_feats_on:
             augment_obj_feat = cat((obj_embed_by_pred_labels, inst_roi_feats, augment_obj_feat), -1)#先前的augment_obj_feat是roi_feat+world_dis+pos_embe
         else:
@@ -332,5 +359,7 @@ class PairwiseFeatureExtractor(nn.Module):
             assert False
         # mapping to hidden
         augment_obj_feat = self.obj_feat_aug_finalize_fc(augment_obj_feat)
+        # memorize average feature
+
 
         return augment_obj_feat, rel_features

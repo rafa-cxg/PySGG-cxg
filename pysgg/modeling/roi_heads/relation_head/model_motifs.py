@@ -19,7 +19,7 @@ class FrequencyBias(nn.Module):
 
     def __init__(self, cfg, statistics, eps=1e-3):
         super(FrequencyBias, self).__init__()
-        pred_dist = np.log(statistics['pred_dist'].float())
+        pred_dist = np.log(statistics['pred_dist'].float())#取对数前，综合接近1
         assert pred_dist.size(0) == pred_dist.size(1)
 
         self.num_objs = pred_dist.size(0)
@@ -61,15 +61,16 @@ class DecoderRNN(nn.Module):
         self.cfg = config
         self.obj_classes = obj_classes
         self.embed_dim = embed_dim
-
-        obj_embed_vecs = obj_edge_vectors(['start'] + self.obj_classes, wv_dir=self.cfg.GLOVE_DIR, wv_dim=embed_dim)
-        self.obj_embed = nn.Embedding(len(self.obj_classes) + 1, embed_dim)
+        if self.cfg.MODEL.ROI_RELATION_HEAD.CAT_WORD_EMBEDDING==False: #todo 设定200是为了和默认glove文件对应，因为后面出现使用它的地方太多不方便if,所以允许加载但不用它
+            self.embed_dim=200
+        obj_embed_vecs = obj_edge_vectors(['start'] + self.obj_classes, wv_dir=self.cfg.GLOVE_DIR, wv_dim=self.embed_dim)
+        self.obj_embed = nn.Embedding(len(self.obj_classes) + 1, self.embed_dim)
         with torch.no_grad():
             self.obj_embed.weight.copy_(obj_embed_vecs, non_blocking=True)
 
         self.hidden_size = hidden_dim
         self.inputs_dim = inputs_dim
-        self.input_size = self.inputs_dim + self.embed_dim
+        self.input_size = self.inputs_dim + embed_dim
         self.nms_thresh = self.cfg.TEST.RELATION.LATER_NMS_PREDICTION_THRES
         self.rnn_drop = rnn_drop
 
@@ -172,8 +173,10 @@ class DecoderRNN(nn.Module):
                 previous_obj_embed = previous_obj_embed[:l_batch]
                 if dropout_mask is not None:
                     dropout_mask = dropout_mask[:l_batch]
-
-            timestep_input = torch.cat((sequence_tensor[start_ind:end_ind], previous_obj_embed), 1)
+            if self.cfg.MODEL.ROI_RELATION_HEAD.CAT_WORD_EMBEDDING:
+                timestep_input = torch.cat((sequence_tensor[start_ind:end_ind], previous_obj_embed), 1)
+            else:
+                timestep_input = (sequence_tensor[start_ind:end_ind])
 
             previous_state, previous_memory = self.lstm_equations(timestep_input, previous_state,
                                                                   previous_memory, dropout_mask=dropout_mask)
@@ -192,7 +195,7 @@ class DecoderRNN(nn.Module):
                 refined_obj_labels.append(labels_to_embed)
                 previous_obj_embed = self.obj_embed(labels_to_embed + 1)
             else:
-                assert l_batch == 1
+                # assert l_batch == 1 #todo 意义何在？
                 out_dist_sample = F.softmax(pred_dist, dim=1)
                 best_ind = out_dist_sample[:, 1:].max(1)[1] + 1
                 refined_obj_labels.append(best_ind)
@@ -273,6 +276,9 @@ class LSTMContext(nn.Module):
 
         # TODO Kaihua Tang
         # AlternatingHighwayLSTM is invalid for pytorch 1.0
+
+        if self.cfg.MODEL.ROI_RELATION_HEAD.CAT_WORD_EMBEDDING==False:
+            self.embed_dim=0
         self.obj_ctx_rnn = torch.nn.LSTM(
             input_size=self.obj_dim + self.embed_dim + 128+self.language_obj_dim,
             hidden_size=self.hidden_dim,
@@ -297,7 +303,7 @@ class LSTMContext(nn.Module):
         self.average_ratio = 0.0005
         self.effect_analysis = config.MODEL.ROI_RELATION_HEAD.CAUSAL.EFFECT_ANALYSIS
 
-        if self.effect_analysis:
+        if self.effect_analysis:#todo 如果同时使用TDE和no_cat,这里要修改
             self.register_buffer("untreated_dcd_feat",
                                  torch.zeros(self.hidden_dim + self.obj_dim + self.embed_dim + 128+self.language_obj_dim))#dcd means 'decoder input'
             self.register_buffer("untreated_obj_feat", torch.zeros(self.obj_dim + self.embed_dim + 128+self.language_obj_dim))
@@ -396,7 +402,11 @@ class LSTMContext(nn.Module):
         if all_average and self.effect_analysis and (not self.training):
             obj_pre_rep = self.untreadcdted_obj_feat.view(1, -1).expand(batch_size, -1)
         else:
-            obj_pre_rep = cat((x, obj_embed, pos_embed), -1)
+            if self.cfg.MODEL.ROI_RELATION_HEAD.CAT_WORD_EMBEDDING:
+                obj_pre_rep = cat((x, obj_embed, pos_embed), -1)
+            else:
+                obj_pre_rep = cat((x, pos_embed), -1)
+
 
         boxes_per_cls = None
         if self.mode == 'sgdet' and not self.training:
@@ -409,9 +419,6 @@ class LSTMContext(nn.Module):
                                                                                     ctx_average=ctx_average)
         # edge level contextual feature
         # RNN message passing on initial object features and object features fuse with the context information
-        # if self.cfg.MODEL.ROI_RELATION_HEAD.use_possibility_merger:
-        #     obj_embed2 = self.obj_embed2(obj_preds.long())
-        # else:
         obj_embed2 = self.obj_embed2(obj_preds.long())
         # obj_embed2 = F.softmax(obj_dists, dim=1) @ self.obj_embed2.weight
 
@@ -419,13 +426,20 @@ class LSTMContext(nn.Module):
         if (all_average or ctx_average) and self.effect_analysis and (not self.training):#TODO all_average只是针对获得ctx feature前的feature是否avg,但它似乎始终是FALSE，需要删除吗
             obj_rel_rep = cat((self.untreated_edg_feat.view(1, -1).expand(batch_size, -1), obj_ctx), dim=-1)#untreated_edg_feat前面进行了初始化为0
         else:
-            obj_rel_rep = cat((obj_embed2, x, obj_ctx), -1)
+            if self.cfg.MODEL.ROI_RELATION_HEAD.CAT_WORD_EMBEDDING:
+                obj_rel_rep = cat((obj_embed2, x, obj_ctx), -1)
+            else:
+                obj_rel_rep = cat((x, obj_ctx), -1)
 
         edge_ctx = self.edge_ctx(obj_rel_rep, perm=perm, inv_perm=inv_perm, ls_transposed=ls_transposed)
 
         # memorize average feature
         if self.training and self.effect_analysis:
             self.untreated_obj_feat = self.moving_average(self.untreated_obj_feat, obj_pre_rep)
-            self.untreated_edg_feat = self.moving_average(self.untreated_edg_feat, cat((obj_embed2, x), -1))
+            if self.cfg.MODEL.ROI_RELATION_HEAD.CAT_WORD_EMBEDDING:
+                self.untreated_edg_feat = self.moving_average(self.untreated_edg_feat, cat((obj_embed2, x), -1))
+            else:
+                self.untreated_edg_feat = self.moving_average(self.untreated_edg_feat, cat(( x), -1))
+
 
         return obj_dists, obj_preds, edge_ctx, None

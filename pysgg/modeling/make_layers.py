@@ -100,7 +100,7 @@ def conv_with_kaiming_uniform(use_gn=False, use_relu=False):
             out_channels,
             kernel_size=kernel_size,
             stride=stride,
-            padding=dilation * (kernel_size - 1) // 2,
+            padding=dilation * (kernel_size - 1) // 2, #保证输出特征图大小不变
             dilation=dilation,
             bias=False if use_gn else True
         )

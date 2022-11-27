@@ -311,20 +311,20 @@ class Two_Stage_Head(torch.nn.Module):
             if self.loss_distribution:
                 try:
                     distribution = self.make_prior_distribution(proposals, rel_pair_idxs, rel_labels_all)
-                    distribution
+
                 except NameError:
                     print("Check in whether \"PURE_SENMENTIC\" is ON in cfg file!")
 
 
-                loss_relation =self.loss_evaluator_distribution(relation_logits,rel_labels_all,distribution)
+                loss_twostage =self.loss_evaluator_distribution(relation_logits,rel_labels_all,distribution)
             else:
-                loss_relation = self.loss_evaluator_2stage(
+                loss_twostage = self.loss_evaluator_2stage(
                 proposals, rel_labels_all, relation_logits
             )
             #torch.argmax(relation_logits[0][:,1:],-1)+1
             output_losses = dict()
 
-            output_losses = dict(loss_two_stage=loss_relation)
+            output_losses = dict(loss_two_stage=loss_twostage)
             output_losses_checked = {}#check whether loss is none
             if self.training:
                 for key in output_losses.keys():
@@ -384,8 +384,8 @@ class  make_pure_senmatic_feature(torch.nn.Module):
             self.mode = "sgdet"
 
     def forward(self,proposals,rel_pair_idxs,wordembedding_corpus):
-        prop_infos=encode_box_info(proposals)#x,y...
-
+        # prop_infos=encode_box_info(proposals)[:,[0,1,8]]#cx,cy,area
+        prop_infos = encode_box_info(proposals)
 
         rel_infos=(encode_rel_box_info(proposals, rel_pair_idxs))#iou,distance
         sub_embed=[]
@@ -455,32 +455,23 @@ class  make_prior_distribution(torch.nn.Module):
                         proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 0]]]) * (
                      self.obj_distribution[
                          proposals[image].get_field('labels').type(torch.LongTensor)[rel_pair_idx[:, 1]]]))
-                    prior=torch.nn.functional.normalize(prior,p=1)
-                    if self.cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT and self.cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT_FACTOR!=0:
-
-                        prior=prior*self.cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT_FACTOR
-                        bias=torch.zeros_like(prior, dtype=prior.dtype).scatter_(1, rel_labels[image].view(-1, 1), self.cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT_FACTOR)
-                        bias[:,0]=0
-                        prior+=bias #bias是与prior一样维度的0矩阵，但标签所处元素位置为DYNAMIC_GT_FACTOR值
-                        prior = torch.nn.functional.normalize(prior, p=1)#消除对负样本放缩的影响
-                    embed.append(prior)
-
                 else:
                     prior = ((self.sub_distribution[
                         proposals[image].get_field('pred_labels').type(torch.LongTensor)[rel_pair_idx[:, 0]]]) * (
                                  self.obj_distribution[
-                                     proposals[image].get_field('pred_labels').type(torch.LongTensor)[rel_pair_idx[:, 1]]]))
-                    prior = torch.nn.functional.normalize(prior, p=1)
-                    if self.cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT and self.cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT_FACTOR!=0:
+                                     proposals[image].get_field('pred_labels').type(torch.LongTensor)[
+                                         rel_pair_idx[:, 1]]]))
+                prior=torch.nn.functional.normalize(prior,p=1)
+                if self.cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT and self.cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT_FACTOR!=0:
 
-                        prior=prior*self.cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT_FACTOR
-                        bias=torch.zeros_like(prior, dtype=prior.dtype).scatter_(1, rel_labels[image].view(-1, 1), (1-self.cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT_FACTOR))
-                        bias[:, 0] = 0
-                        prior += bias  # bias是与prior一样维度的0矩阵，但标签所处元素位置为DYNAMIC_GT_FACTOR值
-                        prior = torch.nn.functional.normalize(prior, p=1)
-                    embed.append(prior)
-
-
+                    prior=prior*self.cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT_FACTOR
+                    bias=torch.zeros_like(prior, dtype=prior.dtype).scatter_(1, rel_labels[image].view(-1, 1), (1-self.cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT_FACTOR))
+                    bias[:,0]=0
+                    # prior+=bias+1e-6 #bias是与prior一样维度的0矩阵，但标签所处元素位置为DYNAMIC_GT_FACTOR值
+                    # prior = torch.nn.functional.normalize(prior, p=1)#消除对负样本放缩的影响
+                    # prior=torch.log(prior,dim=-1)#取对数
+                    # prior=torch.log(prior)
+                embed.append(prior)
 
         return embed
         # return torch.cat(embed).cuda().type(torch.cuda.FloatTensor)

@@ -332,7 +332,7 @@ class InstanceFeaturesAugments(nn.Module):
         else:
             self.embed_dim = 0
 
-        self.effect_analysis = False
+
         if self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ:
             self.language_obj_dim=512
         else: self.language_obj_dim=0

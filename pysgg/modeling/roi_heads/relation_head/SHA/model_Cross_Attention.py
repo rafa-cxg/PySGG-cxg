@@ -122,6 +122,8 @@ class CA_Context(nn.Module):
         obj_pre_rep_vis = self.lin_obj_visual(obj_pre_rep_vis)
         obj_pre_rep_txt = obj_embed
         obj_pre_rep_txt = self.lin_obj_textual(obj_pre_rep_txt)
+        # if self.cfg.MODEL.ROI_RELATION_HEAD.CAT_WORD_EMBEDDING and  self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ:#用SEM的word tocken代替 word embedding
+        #     obj_pre_rep_txt=roi_features[:,(roi_features.shape[1]-512):] #todo 我需要测试一下，是否应该蔡roi_features的时候就融入SEM了
         obj_feats_vis, _, = self.context_obj(obj_pre_rep_vis, obj_pre_rep_txt, num_objs)
         obj_feats = obj_feats_vis
 

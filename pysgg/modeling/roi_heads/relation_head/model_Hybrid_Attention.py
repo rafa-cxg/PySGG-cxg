@@ -146,6 +146,8 @@ class SHA_Context(nn.Module):
             self.language_obj_dim = 512
         else:
             self.language_obj_dim = 0
+        # if self.cfg.MODEL.ROI_RELATION_HEAD.CAT_WORD_EMBEDDING == False:
+        #     self.embed_dim=512
         self.lin_obj_visual = nn.Linear(self.in_channels + 128+self.language_obj_dim, self.hidden_dim)
         self.lin_obj_textual = nn.Linear(self.embed_dim, self.hidden_dim)
 
@@ -194,18 +196,25 @@ class SHA_Context(nn.Module):
         if (ctx_average) and self.effect_analysis and (not self.training):
             obj_pre_rep_vis = self.untreated_obj_feat.view(1, -1).expand(batch_size, -1)
 
+        # elif self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ:
+        #     obj_pre_rep_vis = cat((roi_features[:,:(roi_features.shape[1]-512)], pos_embed), -1)
         else:
             obj_pre_rep_vis = cat((roi_features, pos_embed), -1)
         if self.training and self.effect_analysis:
             self.untreated_obj_feat = self.moving_average(self.untreated_obj_feat, obj_pre_rep_vis)
         obj_pre_rep_vis = self.lin_obj_visual(obj_pre_rep_vis)
-        obj_pre_rep_txt = obj_embed
+        if self.cfg.MODEL.ROI_RELATION_HEAD.CAT_WORD_EMBEDDING==False  and  self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ:#用SEM的word tocken代替 word embedding
+            obj_pre_rep_txt=roi_features[:,(roi_features.shape[1]-512):] #todo 我需要测试一下，是否应该蔡roi_features的时候就融入SEM了
+        else:
+            obj_pre_rep_txt = obj_embed#obj_pre_rep_txt 是节点传播中的word embedding layer
         obj_pre_rep_txt = self.lin_obj_textual(obj_pre_rep_txt)
         obj_feats_vis, _, = self.context_obj(obj_pre_rep_vis, obj_pre_rep_txt, num_objs)#不需要ctx_avg，因为没有decoder结构
         obj_feats = obj_feats_vis
 
         if (ctx_average) and self.effect_analysis and (not self.training):
             edge_pre_rep_vis = self.untreated_edg_feat.view(1, -1).expand(batch_size, -1)
+        # elif self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ:
+        #     edge_pre_rep_vis = cat((roi_features[:,:(roi_features.shape[1]-512)], obj_feats), dim=-1)#是为了不要在这里引入语义特征
         else:
             edge_pre_rep_vis = cat((roi_features, obj_feats), dim=-1)
         # predict obj_dists and obj_preds
@@ -226,6 +235,10 @@ class SHA_Context(nn.Module):
             self.untreated_edg_feat = self.moving_average(self.untreated_edg_feat, edge_pre_rep_vis)
         # edge context
         edge_pre_rep_vis = self.lin_edge_visual(edge_pre_rep_vis)
+        # if self.cfg.MODEL.ROI_RELATION_HEAD.CAT_WORD_EMBEDDING==False  and self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ:  # 用SEM的word tocken代替 word embedding
+        #     edge_pre_rep_txt = roi_features[:,
+        #                       (roi_features.shape[1] - 512):]  # todo 我需要测试一下，是否应该蔡roi_features的时候就融入SEM了
+
         edge_pre_rep_txt = self.lin_edge_textual(edge_pre_rep_txt)
         edge_ctx_vis, _ = self.context_edge(edge_pre_rep_vis, edge_pre_rep_txt, num_objs)
         edge_ctx = edge_ctx_vis

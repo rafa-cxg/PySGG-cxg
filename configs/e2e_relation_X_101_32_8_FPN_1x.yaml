@@ -6,7 +6,7 @@ INPUT:
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
   WEIGHT: "catalog://ImageNetPretrained/FAIR/20171220/X-101-32x8d"
-  TWO_STAGE_ON: true
+  TWO_STAGE_ON: False
   TWO_STAGE_HEAD:
     loss_distribution: true
     PURE_SENMENTIC: true
@@ -71,13 +71,16 @@ MODEL:
     ATTRIBUTE_BGFG_SAMPLE: True    
     ATTRIBUTE_BGFG_RATIO: 3        
   ROI_RELATION_HEAD:
+#    FOCAL_LOSS:
+#      GAMMA: 2.0
+
     USE_GT_BOX: False
     USE_GT_OBJECT_LABEL: False
     REQUIRE_BOX_OVERLAP: False              # for sgdet, during training, only train pairs with overlap
     ADD_GTBOX_TO_PROPOSAL_IN_TRAIN: True    # for sgdet only, in case some gt boxes are missing
     NUM_CLASSES: 51                 # 51 for VG, 201 for GQA (not contain "to the left of" & "to the right of")
-    BATCH_SIZE_PER_IMAGE: 1024      # sample as much as possible
-    POSITIVE_FRACTION: 0.25
+    BATCH_SIZE_PER_IMAGE: 128      # sample as much as possible
+    POSITIVE_FRACTION: 1.0
     CONTEXT_POOLING_DIM: 4096
     CONTEXT_HIDDEN_DIM: 512         #1024 for VCTree
     POOLING_ALL_LEVELS: True
@@ -85,6 +88,7 @@ MODEL:
     FEATURE_EXTRACTOR: "RelationFeatureExtractor"
     USE_SEM_WORD_EMBEDDING: False
     LANGUAGE_SPATIAL_ATTENTION: False
+    CAT_WORD_EMBEDDING: True #whether concat object class embedding
     #################### Select Relationship Model ####################
     #PREDICTOR: "MotifPredictor"
     #PREDICTOR: "VCTreePredictor"
@@ -143,7 +147,7 @@ SOLVER:
   SCHEDULE:
     # the following paramters are only used for WarmupReduceLROnPlateau
     TYPE: "WarmupReduceLROnPlateau"    # WarmupMultiStepLR, WarmupReduceLROnPlateau
-    PATIENCE: 6
+    PATIENCE: 4
     THRESHOLD: 0.001
     COOLDOWN: 0
     FACTOR: 0.8
@@ -155,7 +159,7 @@ TEST:
     SYNC_GATHER: True      # turn on will slow down the evaluation to solve the sgdet test out of memory problem
     REQUIRE_OVERLAP: False
     LATER_NMS_PREDICTION_THRES: 0.5
-GLOBAL_SETTING:
+GLOBAL_SETTING:  #Only for use of SHA MODEL
   ############### Parameters for Basic Encoder in Predictor ##############
   #RELATION_PREDICTOR: "MotifsLikePredictor"
   #RELATION_PREDICTOR: "VCTreePredictor"
@@ -179,4 +183,4 @@ GLOBAL_SETTING:
     ############### The Following Parameters would not affect the performance much, is nearly useless ##############
     NO_RELATION_RESTRAIN: True              # If two object do not have a relation, then limit their contribution to the final loss
     ZERO_LABEL_PADDING_MODE: 'rand_insert'  # ['rand_insert', 'rand_choose', 'all_include'], to control how to insert into the relation which is ZERO
-    NO_RELATION_PENALTY: 0.1
+    NO_RELATION_PENALTY: 0.1 # only for  GCL

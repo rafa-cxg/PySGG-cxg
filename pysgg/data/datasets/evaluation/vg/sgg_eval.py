@@ -214,7 +214,77 @@ class SGRecall(SceneGraphEvaluation):
                 self.result_dict[mode + "_2stagerecall"][k].append(rec_i)
         return local_container
 
+class SGTOPRecall(SceneGraphEvaluation):
+    def __init__(self, result_dict):
+        super(SGTOPRecall, self).__init__(result_dict)
+        self.type = "toprecall"
+        self.val_freq=False# False表明是eval EEM, true是验证freq bias.
 
+    def register_container(self, mode):
+        self.result_dict[mode + f"_{self.type}"] = {1: [], 5: []}
+
+
+    def generate_print_string(self, mode):
+        result_str = "SGG eval: "
+        for k, v in self.result_dict[mode + "_toprecall"].items():
+            result_str += "  R @ %d: %.4f; " % (k, np.mean(v))
+        result_str += " for mode=%s, type=TOP Recall." % mode
+        result_str += "\n"
+        return result_str
+
+    def calculate_recall(self, global_container, local_container, mode):
+        if self.val_freq==True:
+            pred_rel_inds = local_container[
+                "pred_rel_inds"]  # inds确实是编号，因为1 image里面proposal不能超过80个，所以inds也不超过80,这个编号直接从rel_pair_idx来的
+            rel_scores = local_container["freq_scores"]
+        else:
+            pred_rel_inds = local_container["pred_2stage_rel_inds"]#inds确实是编号，因为1 image里面proposal不能超过80个，所以inds也不超过80,这个编号直接从rel_pair_idx来的
+            rel_scores = local_container["2stage_rel_scores"]
+
+        gt_rels = local_container["gt_rels"]#[n,3],(sub_id, ob_id, pred_label)
+        gt_classes = local_container["gt_classes"]
+        gt_boxes = local_container["gt_boxes"]
+
+        pred_classes = local_container["pred_classes"]
+        pred_boxes = local_container["pred_boxes"]#[]80,4
+        obj_scores = local_container["obj_scores"]#[num_prop,]
+        iou_thres = global_container["iou_thres"]
+
+        for k in self.result_dict[mode + f"_{self.type}"].keys():
+            desc_relscore_index=(rel_scores[:, 1:].argsort(-1)[:,::-1])[:,:k].reshape(-1,1)
+            pred_rel_inds=np.expand_dims(pred_rel_inds,1).repeat(k,1).reshape(-1,2)
+            pred_rels = np.column_stack((pred_rel_inds, 1 + desc_relscore_index))#[4096,3],最后一个元素是rel_label,如果是predcls:[num_box!,3]
+            try:
+                rel_scores=rel_scores.repeat(k,0)
+                pred_scores = rel_scores[:,1:].max(-1)
+            except:
+                a=1
+            # pred_scores = rel_scores[:, 1:].max(1)#todo 为什么排除background? 因为不存在真正意义的no relation吧
+            gt_triplets, gt_triplet_boxes, _ = _triplet(gt_rels, gt_classes, gt_boxes)#gt_triplets[sub_clss,rel_class,obj_class]
+            pred_triplets, pred_triplet_boxes, pred_triplet_scores = _triplet(#pred_triplet_scores:sub\pred\obj score
+            pred_rels, pred_classes, pred_boxes, pred_scores, obj_scores
+        )
+            pred_to_gt = _compute_pred_matches(#返回的pred_to_gt不仅仅label对应，且sub\obj box坐标处于iou阈值之间
+                gt_triplets,
+                pred_triplets,
+                gt_triplet_boxes,
+                pred_triplet_boxes,
+                iou_thres,
+                phrdet=mode == "phrdet",
+            )
+            topk=k*100
+            match = reduce(np.union1d, pred_to_gt[:topk])
+            rec_i = float(len(match)) / float(gt_rels.shape[0])
+            self.result_dict[mode + "_toprecall"][k].append(rec_i)
+
+        # local_container["pred_to_gt"] = pred_to_gt
+        #
+        # local_container["gt_triplets"] = gt_triplets
+        #
+        # local_container["gt_triplet_boxes"] = gt_triplet_boxes
+
+
+        return local_container
 """
 No Graph Constraint Recall, implement based on:
 https://github.com/rowanz/neural-motifs

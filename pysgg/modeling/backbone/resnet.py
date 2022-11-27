@@ -47,6 +47,10 @@ ResNet50StagesTo5 = tuple(
     StageSpec(index=i, block_count=c, return_features=r)
     for (i, c, r) in ((1, 3, False), (2, 4, False), (3, 6, False), (4, 3, True))
 )
+ResNet50Stages2To5 = tuple(
+    StageSpec(index=i, block_count=c, return_features=r)
+    for (i, c, r) in ((2, 3, False), (3, 4, False), (4, 6, True))
+)
 # ResNet-50 up to stage 4 (excludes stage 5)
 ResNet50StagesTo4 = tuple(
     StageSpec(index=i, block_count=c, return_features=r)
@@ -62,6 +66,9 @@ ResNet101StagesTo4 = tuple(
     StageSpec(index=i, block_count=c, return_features=r)
     for (i, c, r) in ((1, 3, False), (2, 4, False), (3, 23, True))
 )
+
+ResNet101StagesTo2 =(StageSpec(index=1, block_count=23, return_features=True),)
+
 # ResNet-50-FPN (including all stages)
 ResNet50FPNStagesTo5 = tuple(
     StageSpec(index=i, block_count=c, return_features=r)
@@ -79,7 +86,7 @@ ResNet152FPNStagesTo5 = tuple(
 )
 
 class ResNet(nn.Module):
-    def __init__(self, cfg):
+    def __init__(self, cfg,for_relation=False):
         super(ResNet, self).__init__()
 
         # If we want to use the cfg in forward(), then we should make a copy
@@ -88,7 +95,12 @@ class ResNet(nn.Module):
 
         # Translate string names to implementations
         stem_module = _STEM_MODULES[cfg.MODEL.RESNETS.STEM_FUNC]
-        stage_specs = _STAGE_SPECS[cfg.MODEL.BACKBONE.CONV_BODY]
+        if for_relation:
+            stage_specs = _STAGE_SPECS[cfg.MODEL.ROI_RELATION_HEAD.LM_CONV_BODY]
+            in_channels = 256  # 指的是stem layer输出维度，也是后面layer的输入
+        else:
+            stage_specs = _STAGE_SPECS[cfg.MODEL.BACKBONE.CONV_BODY]
+            in_channels = cfg.MODEL.RESNETS.STEM_OUT_CHANNELS  # 指的是stem layer输出维度，也是后面layer的输入
         transformation_module = _TRANSFORMATION_MODULES[cfg.MODEL.RESNETS.TRANS_FUNC]
 
         # Construct the stem module
@@ -97,9 +109,12 @@ class ResNet(nn.Module):
         # Constuct the specified ResNet stages
         num_groups = cfg.MODEL.RESNETS.NUM_GROUPS
         width_per_group = cfg.MODEL.RESNETS.WIDTH_PER_GROUP
-        in_channels = cfg.MODEL.RESNETS.STEM_OUT_CHANNELS
+
         stage2_bottleneck_channels = num_groups * width_per_group
         stage2_out_channels = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS
+        if for_relation==True:
+            stage2_bottleneck_channels =stage2_bottleneck_channels//2
+            stage2_out_channels=256
         self.stages = []
         self.return_features = {}
         for stage_spec in stage_specs:
@@ -127,9 +142,9 @@ class ResNet(nn.Module):
             self.add_module(name, module)
             self.stages.append(name)
             self.return_features[name] = stage_spec.return_features
-
-        # Optionally freeze (requires_grad=False) parts of the backbone
-        self._freeze_backbone(cfg.MODEL.BACKBONE.FREEZE_CONV_BODY_AT)
+        if for_relation==False:
+            # Optionally freeze (requires_grad=False) parts of the backbone
+            self._freeze_backbone(cfg.MODEL.BACKBONE.FREEZE_CONV_BODY_AT)
 
     def _freeze_backbone(self, freeze_at):
         if freeze_at < 0:
@@ -145,7 +160,7 @@ class ResNet(nn.Module):
     def forward(self, x):
         outputs = []
         x = self.stem(x)
-        for stage_name in self.stages:
+        for stage_name in self.stages: #'layer1'...
             x = getattr(self, stage_name)(x)
             if self.return_features[stage_name]:
                 outputs.append(x)
@@ -441,10 +456,11 @@ _STEM_MODULES = Registry({
 _STAGE_SPECS = Registry({
     "R-50-C4": ResNet50StagesTo4,
     "R-50-C5": ResNet50StagesTo5,
+    "R-101-C2": ResNet101StagesTo2,
     "R-101-C4": ResNet101StagesTo4,
     "R-101-C5": ResNet101StagesTo5,
     "R-50-FPN": ResNet50FPNStagesTo5,
-    "R-50-FPN-RETINANET": ResNet50FPNStagesTo5,
+    "R-50-FPN-RETINANET": ResNet50FPNStagesTo5, #todo: 这里重复了
     "R-101-FPN": ResNet101FPNStagesTo5,
     "R-101-FPN-RETINANET": ResNet101FPNStagesTo5,
     "R-152-FPN": ResNet152FPNStagesTo5,

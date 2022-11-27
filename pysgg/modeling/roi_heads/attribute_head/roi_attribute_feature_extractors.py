@@ -14,7 +14,6 @@ from pysgg.modeling.poolers import Pooler
 class ResNet50Conv5ROIFeatureExtractor(nn.Module):
     def __init__(self, config, in_channels, *args):
         super(ResNet50Conv5ROIFeatureExtractor, self).__init__()
-
         resolution = config.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
         scales = config.MODEL.ROI_BOX_HEAD.POOLER_SCALES
         sampling_ratio = config.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO

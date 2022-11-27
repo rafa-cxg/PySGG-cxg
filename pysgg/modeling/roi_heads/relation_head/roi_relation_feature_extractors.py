@@ -4,6 +4,7 @@ import random
 import ipdb
 import numpy
 import torch
+import torchvision
 from torch import nn
 
 import cv2
@@ -11,7 +12,8 @@ from pysgg.modeling import registry
 from pysgg.modeling.make_layers import make_fc
 from pysgg.modeling.roi_heads.attribute_head.roi_attribute_feature_extractors import \
     make_roi_attribute_feature_extractor
-from pysgg.modeling.roi_heads.box_head.roi_box_feature_extractors import make_roi_box_feature_extractor
+from pysgg.modeling.roi_heads.box_head.roi_box_feature_extractors import make_roi_box_feature_extractor, \
+    make_relation_box_feature_extractor
 from pysgg.structures.boxlist_ops import boxlist_union
 from pysgg.modeling.roi_heads.relation_head.classifier import build_classifier
 from pysgg.layers import (
@@ -27,6 +29,8 @@ from pysgg.data.datasets.visual_genome import load_info
 from pysgg.utils.imports import import_file
 from pysgg.modeling.roi_heads.relation_head.patch_attention import ViT
 from pysgg.structures.bounding_box import BoxList
+from pysgg.modeling.backbone import build_backbone
+import torch.nn.functional as F
 ind_to_classes=['__background__', 'airplane', 'animal', 'arm', 'bag', 'banana', 'basket', 'beach', 'bear', 'bed', 'bench', 'bike', 'bird', 'board', 'boat', 'book', 'boot', 'bottle', 'bowl', 'box', 'boy', 'branch', 'building', 'bus', 'cabinet', 'cap', 'car', 'cat', 'chair', 'child', 'clock', 'coat', 'counter', 'cow', 'cup', 'curtain', 'desk', 'dog', 'door', 'drawer', 'ear', 'elephant', 'engine', 'eye', 'face', 'fence', 'finger', 'flag', 'flower', 'food', 'fork', 'fruit', 'giraffe', 'girl', 'glass', 'glove', 'guy', 'hair', 'hand', 'handle', 'hat', 'head', 'helmet', 'hill', 'horse', 'house', 'jacket', 'jean', 'kid', 'kite', 'lady', 'lamp', 'laptop', 'leaf', 'leg', 'letter', 'light', 'logo', 'man', 'men', 'motorcycle', 'mountain', 'mouth', 'neck', 'nose', 'number', 'orange', 'pant', 'paper', 'paw', 'people', 'person', 'phone', 'pillow', 'pizza', 'plane', 'plant', 'plate', 'player', 'pole','post', 'pot', 'racket', 'railing', 'rock', 'roof', 'room', 'screen', 'seat', 'sheep', 'shelf', 'shirt', 'shoe', 'short', 'sidewalk', 'sign', 'sink', 'skateboard', 'ski', 'skier', 'sneaker', 'snow', 'sock', 'stand', 'street', 'surfboard', 'table', 'tail', 'tie', 'tile', 'tire', 'toilet', 'towel', 'tower', 'track', 'train', 'tree', 'truck', 'trunk', 'umbrella', 'vase', 'vegetable', 'vehicle', 'wave', 'wheel', 'window', 'windshield', 'wing', 'wire', 'woman', 'zebra']
 ind_to_predicates=['__background__', 'above', 'across', 'against', 'along', 'and', 'at', 'attached to', 'behind', 'belonging to', 'between', 'carrying', 'covered in', 'covering', 'eating', 'flying in', 'for', 'from', 'growing on', 'hanging from', 'has', 'holding', 'in', 'in front of', 'laying on', 'looking at', 'lying on', 'made of', 'mounted on', 'near', 'of', 'on', 'on back of', 'over', 'painted on', 'parked on', 'part of', 'playing', 'riding', 'says', 'sitting on', 'standing on', 'to', 'under', 'using', 'walking in', 'walking on', 'watching', 'wearing', 'wears', 'with']
 
@@ -51,9 +55,12 @@ class RelationFeatureExtractor(nn.Module):
             self.out_channels = self.feature_extractor.out_channels * 2
         else:
             self.feature_extractor = make_roi_box_feature_extractor(cfg, in_channels, cat_all_levels=pool_all_levels,
-                                                                    for_relation=False)#in_channels:256,for_relation=False代表union feature提取不考虑全局
+                                                                    for_relation=False,merge_language=False)#in_channels:256,for_relation=False代表使用sem
             self.out_channels = self.feature_extractor.out_channels#4096
-
+        if cfg.MODEL.ROI_RELATION_HEAD.LM_MULTI_LAYERS:# language map模块在多个阶段使用
+            # self.union_extractor = make_relation_box_feature_extractor(cfg, 64)  #只是用它的pooler
+            self.relation_backbone=build_backbone(cfg,for_relation=True)
+            # self.reduce_channel=nn.Conv2d(256,64,1,1,0)
         self.geometry_feature = cfg.MODEL.ROI_RELATION_HEAD.GEOMETRIC_FEATURES#true
         # union rectangle size
         self.rect_size = resolution * 4 - 1
@@ -82,7 +89,7 @@ class RelationFeatureExtractor(nn.Module):
                                                   ])
         self.visual_language_merger_edge = make_visual_language_merger_edge(
             cfg) if cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_EDGE else None  # language和visual融合
-    def forward(self, x, proposals, targets,rel_pair_idxs=None,visualize_feature=True):
+    def forward(self, x, proposals, targets,rel_pair_idxs=None,visualize_feature=False):
 
         device = x[0].device
         union_proposals = []
@@ -138,7 +145,28 @@ class RelationFeatureExtractor(nn.Module):
                 rect_inputs.append(rect_input)
 
         # union visual feature. size (total_num_rel, in_channels, POOLER_RESOLUTION, POOLER_RESOLUTION)
+        # if self.cfg.MODEL.ROI_RELATION_HEAD.LM_MULTI_LAYERS:
+        #     language_maps=self.visual_language_merger_edge.language_map(proposals,rel_pair_idxs)
+        #     union_vis_features = self.union_extractor.pooler(x, union_proposals)
+        #     # union_vis_features= self.reduce_channel(union_vis_features)
+        #     union_vis_features, language_maps = self.visual_language_merger_edge.staged(union_vis_features,
+        #                                                                                 language_maps, 64)
+        #     union_vis_features=self.relation_backbone.relation_body.layer1(union_vis_features)
+        #     union_vis_features, language_maps = self.visual_language_merger_edge.staged(union_vis_features,
+        #                                                                                 language_maps, 128)
+        #     union_vis_features = self.relation_backbone.relation_body.layer2(union_vis_features)
+        #     union_vis_features, language_maps = self.visual_language_merger_edge.staged(union_vis_features,
+        #                                                                                 language_maps, 256)
+        #
+        # else:
         union_vis_features = self.feature_extractor.pooler(x, union_proposals)#对每一layer的特征算pool,在将通道拼接、缩减
+        if self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_EDGE and self.cfg.MODEL.ROI_RELATION_HEAD.LM_MULTI_LAYERS:
+            union_vis_features = self.relation_backbone.relation_body.layer1(union_vis_features)
+            union_vis_features = self.visual_language_merger_edge(union_vis_features, proposals, rel_pair_idxs,
+                                                                  union_proposals)
+        # 加入多级融合option
+        # torchvision.transforms.functional.crop()
+
         if visualize_feature ==True:
             img_path = targets[0].get_field('image_paths')
             obj = targets[0].get_field('labels')
@@ -174,9 +202,10 @@ class RelationFeatureExtractor(nn.Module):
                 heatmap = cv2.resize(gray_scale, (union.shape[1], union.shape[0]))  # 将热力图的大小调整为与原始图像相同
                 heatmap = numpy.uint8(255 * heatmap)  # 将热力图转换为RGB格式
                 heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)  # 将热力图应用于原始图像
-                superimposed_img = cv2.addWeighted(union, 0.6, heatmap, 0.4, 0)
+                superimposed_img = cv2.addWeighted(union, 0.5, heatmap, 0.5, 0)
                 superimposed_img = cv2.cvtColor(superimposed_img.astype(numpy.uint8), cv2.COLOR_BGR2RGB)
                 # gray_scale = torch.sum(feature_map, 0)
+                # gray_scale = gray_scale / feature_map.shape[0]
                 # gray_scale = gray_scale / feature_map.shape[0]
                 # gray_scale = gray_scale / torch.sum(gray_scale)*255
                 # torch.nn.functional.interpolate(gray_scale,size=size,mode='bilinear')
@@ -192,18 +221,21 @@ class RelationFeatureExtractor(nn.Module):
                     plt.savefig(str('feature_maps.jpg'), bbox_inches='tight')
                     count=count+1
         #这里加入pair的language feature
-        if self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_EDGE:
+        if self.cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_EDGE and self.cfg.MODEL.ROI_RELATION_HEAD.LM_MULTI_LAYERS==False:
             union_vis_features=self.visual_language_merger_edge(union_vis_features, proposals, rel_pair_idxs,union_proposals)
         if visualize_feature ==True:
 
             processed = []
+
             for union_vis_feature,coordinate in zip(union_vis_features,coordinates):
                 coordinate = coordinate.cpu().numpy()
                 coordinate = coordinate.astype("int32")
-                feature_map = union_vis_feature.squeeze(0).detach()
-                weight = gap(feature_map)
-                gray_scale = weight * feature_map
-                gray_scale = torch.sum(gray_scale, dim=0).cpu().numpy()
+                feature_map = union_vis_feature.squeeze(0).detach().cpu()
+                gray_scale=torch.mean(feature_map, axis = 0)
+                # weight = gap(feature_map)
+                # gray_scale = weight * feature_map
+
+                gray_scale = torch.sum(gray_scale, dim=0).numpy()
 
                 gray_scale=(gray_scale-numpy.min(gray_scale))/(numpy.max(gray_scale)-numpy.min(gray_scale))
                 # gray_scale = (gray_scale / numpy.sum(gray_scale))
@@ -339,17 +371,8 @@ class make_visual_language_merger_edge(nn.Module):
         # )
         dim=cfg.MODEL.RESNETS.BACKBONE_OUT_CHANNELS
         #1*1
-        # self.ops = nn.Sequential(
-        #     torch.nn.AvgPool2d(29, padding=2),
-        #     torch.nn.Conv2d(1, (dim//2), 3, 1, 1, bias=False),
-        #     BatchNorm2d(dim//2),
-        #     nn.ReLU(inplace=True),
-        #     # torch.nn.AvgPool2d(290, padding=2),
-        #     torch.nn.Conv2d(dim//2, dim, 3, 1, 1, bias=False),
-        #     BatchNorm2d(dim),
-        #     nn.ReLU(inplace=True),
-        #     torch.nn.AvgPool2d(7)
-        # )
+
+
         self.ops = nn.Sequential(*[
             torch.nn.AvgPool2d(29, padding=2),
             torch.nn.Conv2d(1, 256, 3, 1, bias=True),
@@ -360,6 +383,40 @@ class make_visual_language_merger_edge(nn.Module):
             nn.ReLU(inplace=True)
 
         ])
+        # self.ops1 = nn.Sequential(*[
+        #     torch.nn.AvgPool2d(29, padding=2),
+        #     torch.nn.Conv2d(1, 64, 3, 1, bias=False),
+        #     BatchNorm2d(64),
+        #     nn.ReLU(inplace=True),
+        #     torch.nn.Conv2d(64, 64, 3, 3, bias=False),
+        #     BatchNorm2d(64),
+        #     nn.Softmax(dim=1)
+        #
+        # ])
+        # self.ops2 = nn.Sequential(*[
+        #     torch.nn.Conv2d(64, 128, 1, 1, bias=False),
+        #     BatchNorm2d(128),
+        #     nn.Softmax(dim=1)
+        #
+        # ])
+        # self.ops3 = nn.Sequential(*[
+        #     torch.nn.Conv2d(128, 256, 1, 1, bias=False),
+        #     BatchNorm2d(256),
+        #     nn.Softmax(dim=1)
+        #
+        # ])
+        # self.conv1_1_stage1= torch.nn.Conv2d(64, 64, 1, 1, bias=False)
+        # self.conv1_1_stage2 = torch.nn.Conv2d(128, 128, 1, 1, bias=False)
+        # self.conv1_1_stage3 = torch.nn.Conv2d(256, 256, 1, 1, bias=False)
+        # self.channel_attention=nn.Linear(400, 256)
+        # nn.init.xavier_normal_( self.channel_attention.weight)
+        self.relu=nn.ReLU(inplace=True)
+        self.sigmoid=nn.Sigmoid()
+        self.conv1d= nn.Conv1d(1, 256, 3, stride=1)
+        self.conv1d_2 = nn.Conv1d(256, 256, 3, stride=1)
+        self.batchnorm1d=torch.nn.BatchNorm1d(256)
+        self.pooling=torch.nn.AdaptiveAvgPool1d(1)
+        self.softmax=torch.nn.Softmax(1)
         if self.cfg.MODEL.ROI_RELATION_HEAD.LANGUAGE_SPATIAL_ATTENTION:
             # #for 7*7map
             # self.ops2 = nn.Sequential(*[
@@ -381,14 +438,6 @@ class make_visual_language_merger_edge(nn.Module):
             #     nn.Sigmoid(),
             # ])
             self.vit = ViT(image_size=7,patch_size=1,num_classes=self.num_rel_classes,dim=256,depth = 2,heads = 4,dim_head=64,channels=256,mlp_dim = 512,dropout = 0.1,emb_dropout = 0.1)
-
-        # self.motif_transform=make_fc(7*7*256,1024)
-        # self.c1=Conv2d(1, 256, 3, 1, 1, bias=False)
-        # self.bn=BatchNorm2d(256)
-        # self.relu=nn.ReLU(inplace=True)
-        # self.c2=Conv2d(256, 256, 3, 1, 1, bias=False)
-        # self.bn2=BatchNorm2d(256)
-        # self.avgpool=torch.nn.AvgPool2d(28,padding=2)
 
     def forward(self, visual_feature,proposals,rel_pair_idxs,union_proposals):
         # if self.latest_fusion:
@@ -417,6 +466,75 @@ class make_visual_language_merger_edge(nn.Module):
                     obj_labels = torch.cat([proposal.get_field('pred_labels') for proposal in proposals], dim=0).detach()
                     subwordembedding_corpus = self.sublanguageembedding(
                     obj_labels.long())  # word embedding层，输入word标签得embedding
+                    objwordembedding_corpus =  self.objlanguageembedding(
+                    obj_labels.long())
+
+
+            num = [len(proposal) for proposal in proposals]
+            subwordembedding_corpus = subwordembedding_corpus.split(num, dim=0)
+            objwordembedding_corpus = objwordembedding_corpus.split(num, dim=0)
+            language_channel_attention=[]
+            language_spatial_attention = []
+            for subwordembedding,objwordembedding,rel_pair_idx in zip(subwordembedding_corpus,objwordembedding_corpus,rel_pair_idxs):
+                #将相对union box的sub obj位置编码，分别merge到对应的embedding去
+                language_matrixs=((subwordembedding[rel_pair_idx[:,0]]).unsqueeze(-1) * (objwordembedding[rel_pair_idx[:,1]]).unsqueeze(-1).permute((0, 2, 1))).unsqueeze(1)
+                op=self.ops(language_matrixs)
+                # language_matrixs=((subwordembedding[rel_pair_idx[:, 0]]) * (objwordembedding[rel_pair_idx[:, 1]])).unsqueeze(-1).permute((0, 2, 1))
+                # language_matrixs=self.channel_attention(torch.cat((subwordembedding[rel_pair_idx[:, 0]],objwordembedding[rel_pair_idx[:, 1]]),-1))
+
+                # op=self.conv1d(language_matrixs)
+                # op=self.batchnorm1d(op)
+                # op = self.relu(op)
+                # op = self.conv1d_2(op)
+                # op = self.batchnorm1d(op)
+                # op=self.sigmoid(self.pooling(op))
+                language_channel_attention.append(op)
+                del language_matrixs; del op
+            language_channel_attention=torch.cat(language_channel_attention,0)#[N_PAIRS,1,200,200]
+            if self.cfg.MODEL.ROI_RELATION_HEAD.LANGUAGE_SPATIAL_ATTENTION:
+                spatial_attention = self.vit(visual_feature+language_channel_attention)
+                mixed=spatial_attention+(visual_feature+language_channel_attention)
+            else:
+                mixed = visual_feature * language_channel_attention#.unsqueeze(-1)
+            return mixed
+    def staged(self,visual_feature,language_map,resulution):
+        if resulution==64:
+
+            language_map= self.ops1(language_map)
+            # visual_feature= self.Relu(self.conv1_1_stage1(visual_feature))*language_map
+            visual_feature = self.conv1_1_stage1(visual_feature) * language_map
+            return  visual_feature,language_map
+        if resulution==128:
+            language_map = self.ops2(language_map)
+            # visual_feature =  self.Relu(self.conv1_1_stage2(visual_feature)) * language_map
+            visual_feature = self.conv1_1_stage2(visual_feature) * language_map
+            return visual_feature, language_map
+        if resulution==256:
+            language_map = self.ops3(language_map)
+            # visual_feature =  self.Relu(self.conv1_1_stage3(visual_feature)) * language_map
+            visual_feature = self.conv1_1_stage3(visual_feature) * language_map
+            return visual_feature, language_map
+    def language_map(self,proposals,rel_pair_idxs):#todo 用它代替forward中的部分
+        if self.early_fusion:
+            if self.cfg.MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL:  # obj_embed_by_pred_dist dim:200。obj_labels是把batch里的拼在一起
+                obj_labels = torch.cat([proposal.get_field("labels") for proposal in proposals], dim=0).detach()
+
+
+                subwordembedding_corpus = self.sublanguageembedding(
+                    obj_labels.long())  # word embedding层，输入word标签得embedding
+                objwordembedding_corpus = self.objlanguageembedding(
+                    obj_labels.long())
+
+            else:
+                if self.cfg.MODEL.ROI_RELATION_HEAD.use_possibility_merger:
+
+                    obj_logits = torch.cat([proposal.get_field("predict_logits") for proposal in proposals], dim=0).detach()
+                    subwordembedding_corpus = obj_logits @ self.sublanguageembedding.weight  # ?
+                    objwordembedding_corpus = obj_logits @ self.objlanguageembedding.weight
+                else:
+                    obj_labels = torch.cat([proposal.get_field('pred_labels') for proposal in proposals], dim=0).detach()
+                    subwordembedding_corpus = self.sublanguageembedding(
+                    obj_labels.long())  # word embedding层，输入word标签得embedding
                     objwordembedding_corpus = self.objlanguageembedding(
                     obj_labels.long())
 
@@ -424,45 +542,13 @@ class make_visual_language_merger_edge(nn.Module):
             num = [len(proposal) for proposal in proposals]
             subwordembedding_corpus = subwordembedding_corpus.split(num, dim=0)
             objwordembedding_corpus = objwordembedding_corpus.split(num, dim=0)
-            # subwordembedding_corpus = subwordembedding_corpus.split(num, dim=0)
-            # objwordembedding_corpus = objwordembedding_corpus.split(num, dim=0)
-            language_channel_attention=[]
-            language_spatial_attention = []
-
-            # for subwordembedding,objwordembedding,rel_pair_idx in zip(subwordembedding_corpus,objwordembedding_corpus,rel_pair_idxs):
-            #
-            #     language_matrixs=(subwordembedding[rel_pair_idx.to('cpu')[:,0]].unsqueeze(-1) * objwordembedding[rel_pair_idx.to('cpu')[:,1]].unsqueeze(-1).permute((0, 2, 1))).unsqueeze(1).split(2,0)
-            #     op=torch.cat([(self.ops(language_matrix.to('cuda'))).to('cpu') for language_matrix in language_matrixs],0)
-            #     languageembedding.append(op)
-            #     del language_matrixs; del op
-            # languageembedding=torch.cat(languageembedding,0)#[N_PAIRS,1,200,200]
-            # mixed=visual_feature+languageembedding.to('cuda')
-            # return mixed
+            language_matrixs = []
             for subwordembedding,objwordembedding,rel_pair_idx in zip(subwordembedding_corpus,objwordembedding_corpus,rel_pair_idxs):
                 #将相对union box的sub obj位置编码，分别merge到对应的embedding去
+                language_matrix=((subwordembedding[rel_pair_idx[:,0]]).unsqueeze(-1) * (objwordembedding[rel_pair_idx[:,1]]).unsqueeze(-1).permute((0, 2, 1))).unsqueeze(1)
+                language_matrixs.append(language_matrix)
 
-
-
-                language_matrixs=((subwordembedding[rel_pair_idx[:,0]]).unsqueeze(-1) * (objwordembedding[rel_pair_idx[:,1]]).unsqueeze(-1).permute((0, 2, 1))).unsqueeze(1)
-                op=self.ops(language_matrixs)
-
-                language_channel_attention.append(op)
-                # if self.cfg.MODEL.ROI_RELATION_HEAD.LANGUAGE_SPATIAL_ATTENTION:
-                    # head_pos = self.pos_embed(encode_box_info(union_proposal.get_field("relative_boxes")[:,:4],union_proposal.size))
-                    # tail_pos = self.pos_embed(encode_box_info(union_proposal.get_field("relative_boxes")[:, 4:],union_proposal.size))
-                # union_proposal.del_field("relative_boxes")
-                del language_matrixs; del op
-
-            language_channel_attention=torch.cat(language_channel_attention,0)#[N_PAIRS,1,200,200]
-            if self.cfg.MODEL.ROI_RELATION_HEAD.LANGUAGE_SPATIAL_ATTENTION:
-                # language_spatial_attention = torch.cat(language_spatial_attention, 0)
-                # visual_feature = visual_feature/ (visual_feature+1e-8).norm('fro',dim=(2,3), keepdim=True).cuda()
-                # language_spatial_attention = language_spatial_attention/(language_spatial_attention+1e-8).norm('fro',dim=(2,3), keepdim=True).cuda()
-                spatial_attention = self.vit(visual_feature+language_channel_attention)
-                mixed=spatial_attention+(visual_feature+language_channel_attention)
-            else:
-                mixed = visual_feature + language_channel_attention
-            return mixed
+            return  torch.cat(language_matrixs,0)
 #和motif里面的一样，删去冗余部分
 def encode_box_info(boxes,img_size):
     """

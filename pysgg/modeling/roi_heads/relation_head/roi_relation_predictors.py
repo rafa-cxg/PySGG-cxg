@@ -177,7 +177,7 @@ class TransLike_GCL(nn.Module):
             rel_labels = cat(rel_labels, dim=0)
             max_label = max(rel_labels)
 
-            num_groups = self.incre_idx_list[max_label.item()]
+            num_groups = self.incre_idx_list[max_label.item()]#batch中最大的原始标签，可求得当前Batchx所需的最大group
             if num_groups == 0:
                 num_groups = max(self.incre_idx_list)
             cur_chosen_matrix = []
@@ -190,7 +190,7 @@ class TransLike_GCL(nn.Module):
                 if rel_tar == 0:
                     if self.zero_label_padding_mode == 'rand_insert':
                         random_idx = random.randint(0, num_groups - 1)
-                        cur_chosen_matrix[random_idx].append(i)
+                        cur_chosen_matrix[random_idx].append(i) #如果是负样本，所有的matrix都会采样它
                     elif self.zero_label_padding_mode == 'rand_choose' or self.zero_label_padding_mode == 'all_include':
                         if self.zero_label_padding_mode == 'rand_choose':
                             rand_zeros = random.random()
@@ -987,7 +987,7 @@ class IMPPredictor(nn.Module):
 
         if self.mode == "predcls":
             obj_labels = cat([proposal.get_field("labels") for proposal in proposals], dim=0)
-            obj_dists = to_onehot(obj_labels, self.num_obj)
+            obj_dists = to_onehot(obj_labels, self.num_obj_cls)
         else:
             obj_dists = self.obj_classifier(obj_feats)
 
@@ -1677,7 +1677,7 @@ class AGRCNNPredictor(nn.Module):
         )
 
         # using the object results, update the pred label and logits
-        if self.use_obj_recls_logits:
+        if self.use_obj_recls_logits and self.mode != "predcls":
             boxes_per_cls = cat(
                 [proposal.get_field("boxes_per_cls") for proposal in inst_proposals], dim=0
             )  # comes from post process of box_head
@@ -1728,6 +1728,7 @@ class MotifPredictor(nn.Module):
         num_inputs = in_channels
         self.use_vision = config.MODEL.ROI_RELATION_HEAD.PREDICT_USE_VISION
         self.use_bias = config.MODEL.ROI_RELATION_HEAD.FREQUENCY_BAIS
+        self.val_freq=True
 
         # load class dict
         statistics = get_dataset_statistics(config)
@@ -1753,6 +1754,7 @@ class MotifPredictor(nn.Module):
         self.post_emb = make_fc(self.hidden_dim, self.hidden_dim * 2)
         self.post_cat = make_fc(self.hidden_dim * 2, self.pooling_dim)
         self.rel_compress = build_classifier(self.pooling_dim, self.num_rel_cls, bias=True)
+        self.softmax = nn.Softmax(dim=-1)
 
         # initialize layer parameters
         layer_init(self.post_emb, 10.0 * (1.0 / self.hidden_dim) ** 0.5, normal=True)
@@ -1865,16 +1867,19 @@ class MotifPredictor(nn.Module):
 
         rel_dists = self.rel_compress(prod_rep)
 
-        if self.use_bias and cfg.MODEL.ROI_RELATION_HEAD.BIAS_MODULE.USE_PENALTY!=True:
-            rel_dists = rel_dists + self.freq_bias.index_with_labels(pair_pred.long())
-        else:# apply RTPB module
-            gt = torch.cat( rel_labels, dim=0) if rel_labels is not None else None
-            bias = self.bias_module.index_with_labels(pair_pred.long(), gt=gt)
-            if bias is not None:
-                rel_dists = rel_dists + bias
-
+        if self.use_bias:
+            if  cfg.MODEL.ROI_RELATION_HEAD.BIAS_MODULE.USE_PENALTY!=True:
+                freq_dists=self.freq_bias.index_with_labels(pair_pred.long())
+                rel_dists = rel_dists + freq_dists
+                # proposal.add_field("locating_match", locating_match_stat)
+            else:# apply RTPB module
+                gt = torch.cat( rel_labels, dim=0) if rel_labels is not None else None
+                bias = self.bias_module.index_with_labels(pair_pred.long(), gt=gt)
+                if bias is not None:
+                    rel_dists = rel_dists + bias
         obj_dists = obj_dists.split(num_objs, dim=0)
         rel_dists = rel_dists.split(num_rels, dim=0)
+        freq_dists=freq_dists.split(num_rels, dim=0)
 
         if not self.use_obj_recls_logits:
             obj_dists = [each.get_field("predict_logits") for each in proposals]
@@ -1882,13 +1887,13 @@ class MotifPredictor(nn.Module):
         # we use obj_preds instead of pred from obj_dists
         # because in decoder_rnn, preds has been through a nms stage
         add_losses = {}
-
+        if self.val_freq:
+            [each.add_field("freq_logits",freq_dists[i]) for i,each in enumerate(proposals)]
         if self.attribute_on:
             att_dists = att_dists.split(num_objs, dim=0)
             return (obj_dists, att_dists), rel_dists, add_losses
         else:
             return obj_dists, rel_dists, add_losses
-
 
 @registry.ROI_RELATION_PREDICTOR.register("VCTreePredictor")
 class VCTreePredictor(nn.Module):
@@ -3205,7 +3210,14 @@ class CausalAnalysisPredictor(nn.Module):
         self.use_bgnn = config.MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER == "bgnn"
         self.use_sha = config.MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER == "sha"
         self.effect_type = config.MODEL.ROI_RELATION_HEAD.CAUSAL.EFFECT_TYPE
-
+        # mode
+        if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_BOX:
+            if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL:
+                self.mode = "predcls"
+            else:
+                self.mode = "sgcls"
+        else:
+            self.mode = "sgdet"
         assert in_channels is not None
         num_inputs = in_channels
 
@@ -3227,6 +3239,16 @@ class CausalAnalysisPredictor(nn.Module):
             self.context_layer = bgnn_causal_Context(config, in_channels)
         elif config.MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER == "sha":
             self.context_layer = SHA_Context(config, obj_classes, rel_classes, in_channels)
+        elif config.MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER == "imp":
+            self.hidden_dim = config.MODEL.ROI_RELATION_HEAD.CONTEXT_HIDDEN_DIM
+            self.obj_classifier = build_classifier(self.hidden_dim, self.num_obj_cls)
+            self.obj_classifier.reset_parameters()
+            self.context_layer = IMPContext(
+                config,
+                in_channels,
+                hidden_dim=config.MODEL.ROI_RELATION_HEAD.IMP_MODULE.GRAPH_HIDDEN_DIM,
+                num_iter=config.MODEL.ROI_RELATION_HEAD.IMP_MODULE.GRAPH_ITERATION_NUM,
+            )
         else:
             print("ERROR: Invalid Context Layer")
             assert False
@@ -3363,6 +3385,18 @@ class CausalAnalysisPredictor(nn.Module):
         elif self.cfg.MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER=='sha':
             obj_dists, obj_preds, edge_ctx = self.context_layer(roi_features, proposals, logger, ctx_average=ctx_average)
             binary_preds=None
+        elif self.cfg.MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER == 'imp':
+
+            obj_feats, edge_ctx = self.context_layer(
+                roi_features, proposals, union_features, rel_pair_idxs, logger,ctx_average=ctx_average
+            )
+            if self.mode == "predcls":
+                obj_preds = cat([proposal.get_field("labels") for proposal in proposals], dim=0)
+                obj_dists = to_onehot(obj_preds, self.num_obj_cls)
+            else:
+                obj_dists = self.obj_classifier(obj_feats)
+                obj_preds = torch.argmax(obj_dists,-1)
+            binary_preds = None
         else:
             obj_dists, obj_preds, edge_ctx, binary_preds = self.context_layer(
                 roi_features, proposals, rel_pair_idxs, logger, ctx_average=ctx_average
@@ -3373,73 +3407,74 @@ class CausalAnalysisPredictor(nn.Module):
             edge_ctx
         )
 
-        # if self.cfg.MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER != 'bgnn':
-        # divide to head and tail representation of relationships
-        edge_rep = edge_rep.view(edge_rep.size(0), 2, self.edge_dim)
-        head_rep = edge_rep[:, 0].contiguous().view(-1, self.edge_dim)
-        tail_rep = edge_rep[:, 1].contiguous().view(-1, self.edge_dim)
-        # split
-        head_reps = head_rep.split(num_objs, dim=0)
-        tail_reps = tail_rep.split(num_objs, dim=0)
-        obj_preds = obj_preds.split(num_objs, dim=0)
-        obj_prob_list = obj_dist_prob.split(num_objs, dim=0)
-        obj_dist_list = obj_dists.split(num_objs, dim=0)
-        ctx_reps = []
-        pair_preds = []
-        pair_obj_probs = []
-        pair_bboxs_info = []
-        for pair_idx, head_rep, tail_rep, obj_pred, obj_box, obj_prob in zip(
-            rel_pair_idxs, head_reps, tail_reps, obj_preds, obj_boxs, obj_prob_list
-        ):
-            if self.use_vtranse:
-                ctx_reps.append(head_rep[pair_idx[:, 0]] - tail_rep[pair_idx[:, 1]])
-            else:
-                ctx_reps.append(
-                    torch.cat((head_rep[pair_idx[:, 0]], tail_rep[pair_idx[:, 1]]), dim=-1)
-                )
-            pair_preds.append(
-                torch.stack((obj_pred[pair_idx[:, 0]], obj_pred[pair_idx[:, 1]]), dim=1)
-            )
-            pair_obj_probs.append(
-                torch.stack((obj_prob[pair_idx[:, 0]], obj_prob[pair_idx[:, 1]]), dim=2)
-            )
-            pair_bboxs_info.append(
-                get_box_pair_info(obj_box[pair_idx[:, 0]], obj_box[pair_idx[:, 1]])
-            )
-        pair_obj_probs = cat(pair_obj_probs, dim=0)
-        pair_bbox_geo_feat = cat(pair_bboxs_info, dim=0)
-        pair_pred = cat(pair_preds, dim=0)
-        ctx_rep = cat(ctx_reps, dim=0)
-        if self.use_vtranse:
-            post_ctx_rep = ctx_rep
-        else:
-            post_ctx_rep = self.post_cat(ctx_rep)
-        # else: #如果我是想用bgnn context传回来的edge做，就用这个，但由于原始的unbias中edge_ctx实际上是obj_ctx,vision_ctx是union_feas,unbias是为motif这种输入是单个obj的特征得到edge特征的模型，这种模型只有在predictor中，简单的加上union_feature，没有特征传递过程
+        if self.cfg.MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER != 'imp':# imp is generating pairwise edge_ctx, not same number as objects
 
-            # post_ctx_rep=edge_rep
-            # obj_preds = obj_preds.split(num_objs, dim=0)
-            # obj_prob_list = obj_dist_prob.split(num_objs, dim=0)
-            # obj_dist_list = obj_dists.split(num_objs, dim=0)
-            # pair_preds = []
-            # pair_obj_probs = []
-            # pair_bboxs_info = []
-            # for pair_idx, obj_pred, obj_box, obj_prob in zip(
-            #     rel_pair_idxs, obj_preds, obj_boxs, obj_prob_list
-            # ):
-            #
-            #     pair_preds.append(
-            #         torch.stack((obj_pred[pair_idx[:, 0]], obj_pred[pair_idx[:, 1]]), dim=1)
-            #     )
-            #     pair_obj_probs.append(
-            #         torch.stack((obj_prob[pair_idx[:, 0]], obj_prob[pair_idx[:, 1]]), dim=2)
-            #     )
-            #     pair_bboxs_info.append(
-            #         get_box_pair_info(obj_box[pair_idx[:, 0]], obj_box[pair_idx[:, 1]])
-            #     )
-            # pair_obj_probs = cat(pair_obj_probs, dim=0)
-            # pair_bbox_geo_feat = cat(pair_bboxs_info, dim=0)
-            # pair_pred = cat(pair_preds, dim=0)
-            # edge_rep = None  # 因为之后unbias并没有使用
+            edge_rep = edge_rep.view(edge_rep.size(0), 2, self.edge_dim)
+            head_rep = edge_rep[:, 0].contiguous().view(-1, self.edge_dim)
+            tail_rep = edge_rep[:, 1].contiguous().view(-1, self.edge_dim)
+            # split
+            head_reps = head_rep.split(num_objs, dim=0)
+            tail_reps = tail_rep.split(num_objs, dim=0)
+            obj_preds = obj_preds.split(num_objs, dim=0)
+            obj_prob_list = obj_dist_prob.split(num_objs, dim=0)
+            obj_dist_list = obj_dists.split(num_objs, dim=0)
+            ctx_reps = []
+            pair_preds = []
+            pair_obj_probs = []
+            pair_bboxs_info = []
+            for pair_idx, head_rep, tail_rep, obj_pred, obj_box, obj_prob in zip(
+                rel_pair_idxs, head_reps, tail_reps, obj_preds, obj_boxs, obj_prob_list
+            ):
+                if self.use_vtranse:
+                    ctx_reps.append(head_rep[pair_idx[:, 0]] - tail_rep[pair_idx[:, 1]])
+                else:
+                    ctx_reps.append(
+                        torch.cat((head_rep[pair_idx[:, 0]], tail_rep[pair_idx[:, 1]]), dim=-1)
+                    )
+                pair_preds.append(
+                    torch.stack((obj_pred[pair_idx[:, 0]], obj_pred[pair_idx[:, 1]]), dim=1)
+                )
+                pair_obj_probs.append(
+                    torch.stack((obj_prob[pair_idx[:, 0]], obj_prob[pair_idx[:, 1]]), dim=2)
+                )
+                pair_bboxs_info.append(
+                    get_box_pair_info(obj_box[pair_idx[:, 0]], obj_box[pair_idx[:, 1]])
+                )
+            pair_obj_probs = cat(pair_obj_probs, dim=0)
+            pair_bbox_geo_feat = cat(pair_bboxs_info, dim=0)
+            pair_pred = cat(pair_preds, dim=0)
+            ctx_rep = cat(ctx_reps, dim=0)
+            if self.use_vtranse:
+                post_ctx_rep = ctx_rep
+            else:
+                post_ctx_rep = self.post_cat(ctx_rep)
+        else: #todo 把bgnn改成这种如果我是想用bgnn context传回来的edge做，就用这个，但由于原始的unbias中edge_ctx实际上是obj_ctx,vision_ctx是union_feas,unbias是为motif这种输入是单个obj的特征得到edge特征的模型，这种模型只有在predictor中，简单的加上union_feature，没有特征传递过程
+
+
+            obj_preds = obj_preds.split(num_objs, dim=0)
+            obj_prob_list = obj_dist_prob.split(num_objs, dim=0)
+            obj_dist_list = obj_dists.split(num_objs, dim=0)
+            pair_preds = []
+            pair_obj_probs = []
+            pair_bboxs_info = []
+            for pair_idx, obj_pred, obj_box, obj_prob in zip(
+                rel_pair_idxs, obj_preds, obj_boxs, obj_prob_list
+            ):
+
+                pair_preds.append(
+                    torch.stack((obj_pred[pair_idx[:, 0]], obj_pred[pair_idx[:, 1]]), dim=1)
+                )
+                pair_obj_probs.append(
+                    torch.stack((obj_prob[pair_idx[:, 0]], obj_prob[pair_idx[:, 1]]), dim=2)
+                )
+                pair_bboxs_info.append(
+                    get_box_pair_info(obj_box[pair_idx[:, 0]], obj_box[pair_idx[:, 1]])
+                )
+            pair_obj_probs = cat(pair_obj_probs, dim=0)
+            pair_bbox_geo_feat = cat(pair_bboxs_info, dim=0)
+            pair_pred = cat(pair_preds, dim=0)
+            post_ctx_rep = self.post_cat(edge_rep)
+            edge_rep = None  # 因为之后unbias并没有使用
         return (
             post_ctx_rep,
             pair_pred,

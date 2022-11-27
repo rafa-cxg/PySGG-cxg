@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from pysgg.data.datasets.evaluation.coco.coco_eval import COCOResults
 from pysgg.data.datasets.evaluation.vg.sgg_eval import SGRecall, SGNoGraphConstraintRecall, \
-    SGZeroShotRecall, SGPairAccuracy, SGMeanRecall, SGStagewiseRecall, SGNGMeanRecall
+    SGZeroShotRecall, SGPairAccuracy, SGMeanRecall, SGStagewiseRecall, SGNGMeanRecall, SGTOPRecall
 from pysgg.data.datasets.visual_genome import HEAD, TAIL, BODY
 
 from functools import partial
@@ -214,7 +214,11 @@ def do_vg_evaluation(
         eval_recall = SGRecall(rel_eval_result_dict)#这只是Init了对应的class
         eval_recall.register_container(mode)
         evaluator['eval_recall'] = eval_recall
-
+        # top-5 recall
+        if cfg.TEST.EVAL_TOPRECALL:
+            eval_toprecall = SGTOPRecall(rel_eval_result_dict)
+            eval_toprecall.register_container(mode)
+            evaluator['eval_toprecall'] = eval_toprecall
         # no graphical constraint
         eval_nog_recall = SGNoGraphConstraintRecall(rel_eval_result_dict)
         eval_nog_recall.register_container(mode)
@@ -366,22 +370,24 @@ def do_vg_evaluation(
 
                 global eval_times
                 eval_times += 1
-                save_file = os.path.join(cfg.OUTPUT_DIR,
-                                         f"rel_freq_dist2recall-{mean_recall_evaluator.type}-{eval_times}.png")
-                fig.savefig(save_file, dpi=300)
-                plt.cla()
-                plt.close(fig)
+                # save_file = os.path.join(cfg.OUTPUT_DIR,
+                #                          f"rel_freq_dist2recall-{mean_recall_evaluator.type}-{eval_times}.png")
+                # fig.savefig(save_file, dpi=300)
+                # plt.cla()
+                # plt.close(fig)
         per_cls_res_dict = eval_mean_recall.result_dict[f'{mode}_{eval_mean_recall.type}_list'][100]
-        show_per_cls_performance_and_frequency(eval_mean_recall, per_cls_res_dict)
+        # show_per_cls_performance_and_frequency(eval_mean_recall, per_cls_res_dict)
 
         per_cls_res_dict = eval_ng_mean_recall.result_dict[f'{mode}_{eval_ng_mean_recall.type}_list'][100]
-        show_per_cls_performance_and_frequency(eval_ng_mean_recall, per_cls_res_dict)
+        # show_per_cls_performance_and_frequency(eval_ng_mean_recall, per_cls_res_dict)
 
         longtail_part_res_dict, longtail_part_res_str = longtail_part_eval(eval_mean_recall, mode)
         ng_longtail_part_res_dict, ng_longtail_part_res_str = longtail_part_eval(eval_ng_mean_recall, mode)
         
         # print result
         result_str += eval_recall.generate_print_string(mode)
+        if cfg.TEST.EVAL_TOPRECALL:
+            result_str += eval_toprecall.generate_print_string(mode)
         result_str += eval_nog_recall.generate_print_string(mode)
         result_str += eval_zeroshot_recall.generate_print_string(mode)
         result_str += eval_mean_recall.generate_print_string(mode)
@@ -389,8 +395,17 @@ def do_vg_evaluation(
         result_str += eval_stagewise_recall.generate_print_string(mode)
         result_str += longtail_part_res_str
         result_str += f"(Non-Graph-Constraint) {ng_longtail_part_res_str}"
-
-        result_dict_list_to_log.extend([generate_eval_res_dict(eval_recall, mode),#这里存放的是list of dict，每个元素代表一种evaluator,generate_eval_res_dict是取每个metric内部，所有图片的平均
+        if cfg.TEST.EVAL_TOPRECALL:
+            result_dict_list_to_log.extend([generate_eval_res_dict(eval_recall, mode),
+                                            # 这里存放的是list of dict，每个元素代表一种evaluator,generate_eval_res_dict是取每个metric内部，所有图片的平均
+                                            generate_eval_res_dict(eval_toprecall, mode),
+                                            generate_eval_res_dict(eval_nog_recall, mode),
+                                            generate_eval_res_dict(eval_zeroshot_recall, mode),
+                                            generate_eval_res_dict(eval_mean_recall, mode),
+                                            generate_eval_res_dict(eval_ng_mean_recall, mode),
+                                            longtail_part_res_dict, ng_longtail_part_res_dict])
+        else:
+            result_dict_list_to_log.extend([generate_eval_res_dict(eval_recall, mode),#这里存放的是list of dict，每个元素代表一种evaluator,generate_eval_res_dict是取每个metric内部，所有图片的平均
                                         generate_eval_res_dict(eval_nog_recall, mode),
                                         generate_eval_res_dict(eval_zeroshot_recall, mode),
                                         generate_eval_res_dict(eval_mean_recall, mode),
@@ -475,6 +490,8 @@ def evaluate_relation_of_one_image(groundtruth, prediction, global_container, ev
         'rel_pair_idxs').long().detach().cpu().numpy()  # sgdet:(#pred_rels, 2) eg(4096,2) .predcls:[num_box!,2]
     local_container['rel_scores'] = prediction.get_field(
         'pred_rel_scores').detach().cpu().numpy()  # (#pred_rels, num_pred_class)
+    local_container['freq_scores'] = prediction.get_field(
+        'freq_logits').detach().cpu().numpy()
     if cfg.MODEL.TWO_STAGE_ON:
         local_container['gt_2stage'] = groundtruth.get_field('2stage_tuple').long().detach().cpu().numpy()  # [23，3]
         local_container['pred_2stage_rel_inds'] = prediction.get_field(
@@ -544,6 +561,8 @@ def evaluate_relation_of_one_image(groundtruth, prediction, global_container, ev
     #calculate_recall 分母是gt_rel数目，分子是topk预测中hit gt_rel的数目（去重：多个pred_triblet对应一个gt时候算一个）
     local_container = evaluator['eval_recall'].calculate_recall(global_container, local_container, mode)#'pred_rel_inds'[4096,2]
 
+    if evaluator.get("eval_toprecall") is not None:
+        evaluator['eval_toprecall'].calculate_recall(global_container, local_container, mode)
     # No Graph Constraint
     if evaluator.get("eval_nog_recall") is not None:
         evaluator['eval_nog_recall'].calculate_recall(global_container, local_container, mode)

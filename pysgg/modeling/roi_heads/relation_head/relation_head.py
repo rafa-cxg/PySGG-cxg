@@ -1,5 +1,6 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 import json
+
 import pickle
 
 import torch
@@ -112,7 +113,7 @@ class ROIRelationHead(torch.nn.Module):
             if self.rel_prop_type == "pre_clser":
                 self.use_same_label_with_clser == cfg.MODEL.ROI_RELATION_HEAD.RELATION_PROPOSAL_MODEL.USE_SAME_LABEL_WITH_CLSER
 
-    def forward(self, features, proposal, targets=None, logger=None,**kwargs):
+    def forward(self, features,relation_features, proposal, targets=None, logger=None,**kwargs):
         """
         Arguments:
             features (list[Tensor]): feature-maps from possibly several levels
@@ -230,7 +231,10 @@ class ROIRelationHead(torch.nn.Module):
             roi_features = torch.cat((roi_features, att_features), dim=-1)
 
         if self.use_union_box:#yes
-            union_features = self.union_feature_extractor(features, proposals,targets, rel_pair_idxs)#union包括所有的N!组合
+            if relation_features != None:
+                union_features = self.union_feature_extractor(relation_features, proposals,targets, rel_pair_idxs)#union包括所有的N!组合
+            else:
+                union_features = self.union_feature_extractor(features, proposals, targets, rel_pair_idxs)
         else:
             union_features = None
 
@@ -252,7 +256,7 @@ class ROIRelationHead(torch.nn.Module):
         )# 计算loss:RelAwareLoss. add_losses包括3个，分别对应3个iteration的predict预测loss
         if relation_logits!=None:relation_logits=list(relation_logits)
         #----------------------add EEM on relation logits------------------#
-        if self.cfg.MODEL.TWO_STAGE_ON and relation_logits!=None:#当 relation_logits为none的时候，说明是SHA模型
+        if self.cfg.MODEL.TWO_STAGE_ON and relation_logits!=None and self.cfg.MODEL.ROI_RELATION_HEAD.PREDICTOR !='TransLike_GCL':#当 relation_logits为none的时候，说明是SHA模型
             # twostage_roi_features = twostage.box_feature_extractor(features, proposals)
             # twostage_union_feature=twostage.union_feature_extractor(features, proposals, rel_pair_idxs)
             # two_stage_logits = twostage.two_stage_predictor(  # twostagePredictor，

@@ -264,7 +264,6 @@ def train(
         load_mapping[
             "roi_heads.relation.union_feature_extractor.att_feature_extractor"
         ] = "roi_heads.attribute.feature_extractor"
-
     print("load model to GPU")
     device = torch.device(cfg.MODEL.DEVICE)
     model.to(device)
@@ -414,7 +413,7 @@ def train(
             clustering_loss = deepcluster.sklearn_cluster(feature.to('cpu').numpy())
     # scalar = torch.nn.Parameter(torch.FloatTensor(1)).cuda()  # 用于balance EEM的loss权值
     # torch.nn.init.uniform_(scalar, 0.5)
-    for iteration, (images, targets, _) in (enumerate(train_data_loader, start_iter)):
+    for iteration, (images, targets,_, _) in (enumerate(train_data_loader, start_iter)):
         # torch.cuda.empty_cache()
         if any(len(target) < 1 for target in targets):
             logger.error(
@@ -429,6 +428,7 @@ def train(
         targets = [target.to(device) for target in targets]
         loss_dict = model(images, targets, logger=logger) #predcls:dict:4
         synchronize()
+
         #
         # for key,loss in  loss_dict.items():
         #     if key=='loss_rel':
@@ -759,7 +759,7 @@ def main():
     if args.distributed:
         torch.cuda.set_device(args.local_rank) #default 0
         torch.distributed.init_process_group(backend="nccl", init_method="env://")
-        synchronize()
+        # synchronize()
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
 

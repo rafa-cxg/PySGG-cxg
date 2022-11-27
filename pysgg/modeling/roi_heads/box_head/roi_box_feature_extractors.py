@@ -22,16 +22,22 @@ from ..relation_head.utils_motifs import obj_edge_vectors, to_onehot, encode_box
 from pysgg.data import get_dataset_statistics
 @registry.ROI_BOX_FEATURE_EXTRACTORS.register("ResNet50Conv5ROIFeatureExtractor")
 class ResNet50Conv5ROIFeatureExtractor(nn.Module):
-    def __init__(self, cfg, in_channels, half_out=False, cat_all_levels=False, for_relation=False):
+    def __init__(self, cfg, in_channels, half_out=False, cat_all_levels=False, for_relation=False,merge_language=False):
         super(ResNet50Conv5ROIFeatureExtractor, self).__init__()
-
-        resolution = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
-        scales = cfg.MODEL.ROI_BOX_HEAD.POOLER_SCALES
-        sampling_ratio = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
+        if cfg.MODEL.ROI_RELATION_HEAD.LM_MULTI_LAYERS and merge_language==True:
+            resolution = cfg.MODEL.ROI_RELATION_HEAD.POOLER_RESOLUTION
+            scales = cfg.MODEL.ROI_RELATION_HEAD.POOLER_SCALES
+            sampling_ratio = cfg.MODEL.ROI_RELATION_HEAD.POOLER_SAMPLING_RATIO
+        else:
+            resolution = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
+            scales = cfg.MODEL.ROI_BOX_HEAD.POOLER_SCALES
+            sampling_ratio = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
         pooler = Pooler(
             output_size=(resolution, resolution),
             scales=scales,
             sampling_ratio=sampling_ratio,
+            in_channels=in_channels,
+            cat_all_levels=cat_all_levels
         )
 
         stage = resnet.StageSpec(index=4, block_count=3, return_features=False)
@@ -95,12 +101,16 @@ class FPN2MLPFeatureExtractor(nn.Module):
     Heads for FPN for classification
     """
 
-    def __init__(self, cfg, in_channels, half_out=False, cat_all_levels=False, for_relation=False):
+    def __init__(self, cfg, in_channels, half_out=False, cat_all_levels=False, for_relation=False,merge_language=False):
         super(FPN2MLPFeatureExtractor, self).__init__()
-
-        resolution = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
-        scales = cfg.MODEL.ROI_BOX_HEAD.POOLER_SCALES
-        sampling_ratio = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
+        if cfg.MODEL.ROI_RELATION_HEAD.LM_MULTI_LAYERS and merge_language==True:
+            resolution = cfg.MODEL.ROI_RELATION_HEAD.POOLER_RESOLUTION
+            scales = cfg.MODEL.ROI_RELATION_HEAD.POOLER_SCALES
+            sampling_ratio = cfg.MODEL.ROI_RELATION_HEAD.POOLER_SAMPLING_RATIO
+        else:
+            resolution = cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
+            scales = cfg.MODEL.ROI_BOX_HEAD.POOLER_SCALES
+            sampling_ratio = cfg.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
         pooler = Pooler(
             output_size=(resolution, resolution),
             scales=scales,
@@ -113,20 +123,21 @@ class FPN2MLPFeatureExtractor(nn.Module):
         use_gn = cfg.MODEL.ROI_BOX_HEAD.USE_GN
         self.pooler = pooler
 
-        self.fc6 = make_fc(input_size, representation_size, use_gn)
+
         if half_out:
             out_dim = int(representation_size / 2)
         else:
             out_dim = representation_size
-
-        self.fc7 = make_fc(representation_size, out_dim, use_gn)#512是transformer
-        self.resize_channels = input_size
-        self.out_channels = out_dim
-        self.for_relation = for_relation
-        if cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ and for_relation:
-            self.visual_language_merger_obj = make_visual_language_merger_obj(
-            cfg)   # language和visual融合
-        self.cfg=cfg
+        if merge_language==False:
+            self.fc6 = make_fc(input_size, representation_size, use_gn)
+            self.fc7 = make_fc(representation_size, out_dim, use_gn)#512是transformer
+            self.resize_channels = input_size
+            self.out_channels = out_dim
+            self.for_relation = for_relation
+            if cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ and for_relation:
+                self.visual_language_merger_obj = make_visual_language_merger_obj(
+                cfg)   # language和visual融合
+            self.cfg=cfg
     def forward(self, x, proposals):
         x = self.pooler(x, proposals)
         x = x.view(x.size(0), -1)
@@ -207,11 +218,17 @@ class FPNXconv1fcFeatureExtractor(nn.Module):
         return x
 
 
-def make_roi_box_feature_extractor(cfg, in_channels, half_out=False, cat_all_levels=False, for_relation=False):
+def make_roi_box_feature_extractor(cfg, in_channels, half_out=False, cat_all_levels=False, for_relation=False,merge_language=False):
     func = registry.ROI_BOX_FEATURE_EXTRACTORS[
         cfg.MODEL.ROI_BOX_HEAD.FEATURE_EXTRACTOR
     ]
-    return func(cfg, in_channels, half_out, cat_all_levels, for_relation)
+    return func(cfg, in_channels, half_out, cat_all_levels, for_relation,merge_language)
+def make_relation_box_feature_extractor(cfg, in_channels,merge_language=True):
+    func = registry.ROI_BOX_FEATURE_EXTRACTORS[
+        cfg.MODEL.ROI_RELATION_HEAD.BOX_FEATURE_EXTRACTOR
+
+    ]
+    return func(cfg, in_channels,merge_language=merge_language)
 class make_visual_language_merger_obj(nn.Module):
     def __init__(self,cfg):
         super(make_visual_language_merger_obj, self).__init__()
@@ -233,6 +250,12 @@ class make_visual_language_merger_obj(nn.Module):
 
         self.num_obj_classes = len(self.obj_classes)
         self.num_rel_classes = len(self.rel_classes)
+        self.use_cls_tocken = self.cfg.MODEL.ROI_RELATION_HEAD.USE_CLS_TOCKEN
+        if self.use_cls_tocken:
+            self.num_obj_classes=self.num_obj_classes+1
+            self.obj_classes.append('[cls]')#拼在最后一位
+            self.cls_pos_embed=nn.Embedding(1,128)
+
         #transformer参数
 
         self.embed_dim = self.cfg.MODEL.ROI_RELATION_HEAD.EMBED_DIM
@@ -297,19 +320,35 @@ class make_visual_language_merger_obj(nn.Module):
                     wordembedding_corpus =self.languageembedding(obj_labels.long())
 
         pos_embed = self.pos_embed(encode_box_info(proposals))
-        num = [len(proposal) for proposal in proposals]
-        pos_embeds= pos_embed.split(num, dim=0)
-        wordembedding_corpus = wordembedding_corpus.split(num, dim=0)
+        num_objs = [len(p) for p in proposals]
+        pos_embeds= pos_embed.split(num_objs, dim=0)
+        wordembedding_corpus = wordembedding_corpus.split(num_objs, dim=0)
+        if self.use_cls_tocken:
+            num_objs= list(map(lambda x:x+1,num_objs)) #每个proposal数量加1，即[cls]
+            cls_embedding = self.languageembedding(torch.tensor(self.num_obj_classes - 1).cuda()).unsqueeze(0)
         obj_feats=[]
         for wordembedding,pos_embed, proposal in zip(wordembedding_corpus,pos_embeds,proposals):
             # encode objects with transformer
             obj_pre_rep = torch.cat((wordembedding, pos_embed),-1)
+            if self.use_cls_tocken:
+                obj_pre_rep = torch.cat((torch.cat(
+                    (cls_embedding, self.cls_pos_embed(torch.tensor(0).cuda()).unsqueeze(0)), -1), obj_pre_rep),
+                                      0)  # [cls]拼接到第一位
             obj_feats.append(obj_pre_rep)
-        obj_feats = torch.cat(obj_feats, 0)
-        num_objs = [len(p) for p in proposals]
+        obj_feats = torch.cat(obj_feats, 0)#transformer中，会重新把feature切分成每个image一个list元素的形式
+
         obj_feats = self.lin_obj(obj_feats)
         obj_feats=self.context_obj(obj_feats, num_objs)  # TransformerEncoder
-        mixed=torch.cat((visual_feature,obj_feats),1)
+        if self.use_cls_tocken:
+            cls_feature=[]#存储对应符合visual feature的cls feature
+            obj_feats = obj_feats.split(num_objs, dim=0)
+
+            for obj_feat,num_obj in zip(obj_feats,num_objs):
+                cls_feature.append(obj_feat[0].unsqueeze(0).repeat((num_obj-1), 1))
+            cls_feature=torch.cat(cls_feature,0)
+            mixed = torch.cat((visual_feature, cls_feature ), 1)#把[cls]的特征拼在visual的后面
+        else:
+            mixed=torch.cat((visual_feature,obj_feats),1)
         return  mixed
 
 

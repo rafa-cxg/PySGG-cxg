@@ -2,6 +2,8 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+import os.path as path
+from .RTPB.utils import load_data
 
 from pysgg.layers import Label_Smoothing_Regression
 from pysgg.modeling.matcher import Matcher
@@ -24,6 +26,9 @@ class RelationLossComputation(object):
         attribute_bgfg_ratio,
         use_label_smoothing,
         predicate_proportion,
+        use_focal_loss=False,
+        focal_loss_param=None,
+        weight_path=''
     ):
         """
         Arguments:
@@ -44,7 +49,15 @@ class RelationLossComputation(object):
             self.criterion_loss = nn.CrossEntropyLoss()
 
         self.BCE_loss = cfg.MODEL.ROI_RELATION_HEAD.USE_BINARY_LOSS
+        loss_weight = None
+        if weight_path and path.exists(weight_path):
+            loss_weight = load_data(weight_path)
+            loss_weight = loss_weight.cuda()
 
+        if use_focal_loss:
+            self.rel_criterion_loss = FocalLoss(**focal_loss_param)
+        else:
+            self.rel_criterion_loss = nn.CrossEntropyLoss(weight=loss_weight)
 
     def __call__(self, proposals, rel_labels, relation_logits, refine_logits):
         """
@@ -86,10 +99,8 @@ class RelationLossComputation(object):
             # rel_labels=rel_labels[notnan[:,0]]
             # if torch.all(torch.isnan(relation_logits)) == True:
             #     print('fuck cxg2')
-
-        loss_relation = self.criterion_loss(relation_logits[rel_labels != -1],#交叉熵 relation_logits[128,51]
+        loss_relation = self.rel_criterion_loss(relation_logits[rel_labels != -1],  # 交叉熵 relation_logits[128,51]
                                             rel_labels[rel_labels != -1].long())
-
         loss_refine_obj = self.criterion_loss(refine_obj_logits, fg_labels.long())#因为用的是gt,loss是0 【num_all_prop,151】
 
         # The following code is used to calcaulate sampled attribute loss
@@ -155,8 +166,9 @@ class DistributionLossComputation(object):
     def __init__(self,size_average=True,mode='customed_ce'):
         self.size_average = size_average
         self.mode=mode
-        self.klloss=torch.nn.KLDivLoss()
+        self.klloss=torch.nn.KLDivLoss(reduction="batchmean",log_target=False)
         self.cosloss =torch.nn.CosineEmbeddingLoss()
+        self.mseloss =nn.MSELoss()
         # self.mode='kl_loss'
     def __call__(self, input, target,distributions):
         input = cat(input, dim=0).float()
@@ -183,6 +195,14 @@ class DistributionLossComputation(object):
         if self.mode == 'cos_loss':
             label=torch.tensor([1]).repeat((input.size()[0])).cuda()
             loss=self.cosloss(input,distributions,label)
+            if self.size_average:
+                return loss.mean()
+            else:
+                return loss.sum()
+        if self.mode == 'mse_loss':
+            label=torch.tensor([1]).repeat((input.size()[0])).cuda()
+            # input = F.softmax((input), dim=-1)
+            loss=self.mseloss(input,distributions)
             if self.size_average:
                 return loss.mean()
             else:
@@ -317,6 +337,13 @@ def make_roi_relation_loss_evaluator(cfg):
         cfg.MODEL.ROI_ATTRIBUTE_HEAD.ATTRIBUTE_BGFG_RATIO,
         cfg.MODEL.ROI_RELATION_HEAD.LABEL_SMOOTHING_LOSS,
         cfg.MODEL.ROI_RELATION_HEAD.REL_PROP,
+        use_focal_loss=cfg.MODEL.ROI_RELATION_HEAD.USE_FOCAL_LOSS,
+        focal_loss_param={
+            'gamma': cfg.MODEL.ROI_RELATION_HEAD.FOCAL_LOSS.GAMMA,
+            'alpha': cfg.MODEL.ROI_RELATION_HEAD.FOCAL_LOSS.ALPHA,
+            'size_average': cfg.MODEL.ROI_RELATION_HEAD.FOCAL_LOSS.SIZE_AVERAGE
+        },
+        weight_path=cfg.MODEL.ROI_RELATION_HEAD.LOSS_WEIGHT_PATH,
     )
 
     return loss_evaluator

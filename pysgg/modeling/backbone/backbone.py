@@ -21,20 +21,28 @@ def build_vgg_fpn_backbone(cfg):
 
 @registry.BACKBONES.register("R-50-C4")
 @registry.BACKBONES.register("R-50-C5")
+@registry.BACKBONES.register("R-101-C2")
 @registry.BACKBONES.register("R-101-C4")
 @registry.BACKBONES.register("R-101-C5")
-def build_resnet_backbone(cfg):
-    body = resnet.ResNet(cfg)
-    model = nn.Sequential(OrderedDict([("body", body)]))
+def build_resnet_backbone(cfg,for_relation=False):
+    body = resnet.ResNet(cfg,for_relation)
+    if for_relation==True:
+        model = nn.Sequential(OrderedDict([("relation_body", body)]))
+    else:
+        model = nn.Sequential(OrderedDict([("body", body)]))
     model.out_channels = cfg.MODEL.RESNETS.BACKBONE_OUT_CHANNELS
     return model
-
-
+@registry.BACKBONES.register("R-50-2C5")#用于LMM对union feature提取特征
+def build_union_resnet_backbone(cfg):
+    body = resnet.ResNet(cfg,for_relation=True)
+    model = nn.Sequential(OrderedDict([("union_body", body)]))
+    model.out_channels = cfg.MODEL.RESNETS.BACKBONE_OUT_CHANNELS
+    return model
 @registry.BACKBONES.register("R-50-FPN")
 @registry.BACKBONES.register("R-101-FPN")
 @registry.BACKBONES.register("R-152-FPN")
-def build_resnet_fpn_backbone(cfg):
-    body = resnet.ResNet(cfg)
+def build_resnet_fpn_backbone(cfg,for_relation=False):
+    body = resnet.ResNet(cfg,for_relation)
     in_channels_stage2 = cfg.MODEL.RESNETS.RES2_OUT_CHANNELS
     out_channels = cfg.MODEL.RESNETS.BACKBONE_OUT_CHANNELS
     fpn = fpn_module.FPN(
@@ -50,7 +58,11 @@ def build_resnet_fpn_backbone(cfg):
         ),
         top_blocks=fpn_module.LastLevelMaxPool(),
     )
-    model = nn.Sequential(OrderedDict([("body", body), ("fpn", fpn)]))
+    if for_relation==True:
+        model = nn.Sequential(OrderedDict([("relation_body", body), ("fpn", fpn)]))
+    else:
+
+        model = nn.Sequential(OrderedDict([("body", body), ("fpn", fpn)]))
     model.out_channels = out_channels
     return model
 
@@ -81,9 +93,14 @@ def build_resnet_fpn_p3p7_backbone(cfg):
     return model
 
 
-def build_backbone(cfg):
+def build_backbone(cfg,for_relation=False):
     assert cfg.MODEL.BACKBONE.CONV_BODY in registry.BACKBONES, \
         "cfg.MODEL.BACKBONE.CONV_BODY: {} are not registered in registry".format(
             cfg.MODEL.BACKBONE.CONV_BODY
         )
-    return registry.BACKBONES[cfg.MODEL.BACKBONE.CONV_BODY](cfg)
+    if  for_relation:
+        return registry.BACKBONES[cfg.MODEL.ROI_RELATION_HEAD.LM_CONV_BODY](cfg, for_relation)
+    else:
+        return registry.BACKBONES[cfg.MODEL.BACKBONE.CONV_BODY](cfg,for_relation)
+
+
