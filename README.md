@@ -5,8 +5,9 @@
 
 Our paper [Biasing like human: a cognitive bias framework for scene graph generation] official code
 <!-- (https://arxiv.org/abs/2104.00308) -->
-We also announce a new scene graph branchmark as replacement of scene-graph-brenchmark and PySGG.
-Except all existing feature of abrove, there are extra following updating:
+We also announce a new scene graph branchmark as replacement of scene-graph-brenchmark and PySGG. There
+are following updating:
+- fix PYSGG bug that always map box.weight to relation.weight, even checkpoint is given (commit 9131f3.. ) 
 - Add more state of art methods: Dual-Transformer, SHA, C-bias
 - Allowing batch size more than one in test/val phrase (fixed from PySGG).
 - fix truncate image error problem.
