@@ -1,4 +1,4 @@
-# Biasing like human: a cognitive bias framework for scene graph generation
+# LANDMARK: Language-guided Representation Enhancement Framework for Scene Graph Generation
 
 [![Python](https://img.shields.io/badge/python-3.7-blue.svg)](https://www.python.org/)
 ![PyTorch](https://img.shields.io/badge/pytorch-1.4.0-%237732a8)
