@@ -3,8 +3,9 @@
 [![Python](https://img.shields.io/badge/python-3.7-blue.svg)](https://www.python.org/)
 ![PyTorch](https://img.shields.io/badge/pytorch-1.4.0-%237732a8)
 
-Our paper [Biasing like human: a cognitive bias framework for scene graph generation] official code
-<!-- (https://arxiv.org/abs/2104.00308) -->
+Our paper [LANDMARK: Language-guided Representation Enhancement Framework for Scene Graph Generation] official code
+
+[//]: # (<!-- &#40;https://arxiv.org/abs/2104.00308&#41; -->)
 We also announce a new scene graph branchmark as replacement of scene-graph-brenchmark and PySGG. There
 are following updating:
 - fix PYSGG bug that always map box.weight to relation.weight, even checkpoint is given (commit 9131f3.. ) 
@@ -37,14 +38,14 @@ Then, you need to modify the pretrained weight parameter `MODEL.PRETRAINED_DETEC
 
 
 
-### C-bias framework
+### LANDMARK framework
 You can follow the following instructions to train your own, which takes 2 GPUs for traing. The results should be very close to the reported results given in paper.
-#### C-bias framework auguments:
+#### LANDMARK framework auguments:
 3 paradiagms are enabled following 3 commands:
 ```
 MODEL.TWO_STAGE_ON True #For EEM
-MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_EDGE True #For LMM
-MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ True  #For SEM
+MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_EDGE True #For LAM
+MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ True  #For LCM
 ```
 you can copy the following command to train
 #### Scripts
