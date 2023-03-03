@@ -3,7 +3,7 @@
 [![Python](https://img.shields.io/badge/python-3.7-blue.svg)](https://www.python.org/)
 ![PyTorch](https://img.shields.io/badge/pytorch-1.4.0-%237732a8)
 
-Our paper [LANDMARK: Language-guided Representation Enhancement Framework for Scene Graph Generation] official code
+Our paper [LANDMARK: Language-guided Representation Enhancement Framework for Scene Graph Generation](https://arxiv.org/abs/2303.01080) official code
 
 [//]: # (<!-- &#40;https://arxiv.org/abs/2104.00308&#41; -->)
 We also announce a new scene graph branchmark as replacement of scene-graph-brenchmark and PySGG. There
@@ -132,7 +132,14 @@ python visualization/visualize_PredCls_and_SGCls.py --detected_origin_path <your
 If you find this project helps your research, please kindly consider citing our papers in your publications.
 
 ```
-
+@misc{chang2023landmark,
+      title={LANDMARK: Language-guided Representation Enhancement Framework for Scene Graph Generation}, 
+      author={Xiaoguang Chang and Teng Wang and Shaowei Cai and Changyin Sun},
+      year={2023},
+      eprint={2303.01080},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
+}
 ```
 
 
