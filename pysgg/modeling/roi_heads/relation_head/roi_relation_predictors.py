@@ -48,11 +48,11 @@ from .model_cross_transformer import CrossTransformerEncoder
 from .model_Hybrid_Attention import SHA_Context
 from .SHA.model_Cross_Attention import CA_Context
 
-from SHA_GCL_extra.kl_divergence import KL_divergence
-from SHA_GCL_extra.utils_funcion import FrequencyBias_GCL
-from SHA_GCL_extra.extra_function_utils import generate_num_stage_vector, generate_sample_rate_vector, \
-    generate_current_sequence_for_bias, get_current_predicate_idx
-from SHA_GCL_extra.group_chosen_function import get_group_splits
+# from SHA_GCL_extra.kl_divergence import KL_divergence
+# from SHA_GCL_extra.utils_funcion import FrequencyBias_GCL
+# from SHA_GCL_extra.extra_function_utils import generate_num_stage_vector, generate_sample_rate_vector, \
+#     generate_current_sequence_for_bias, get_current_predicate_idx
+# from SHA_GCL_extra.group_chosen_function import get_group_splits
 @registry.ROI_RELATION_PREDICTOR.register("TransLike_GCL")
 class TransLike_GCL(nn.Module):
     def __init__(self, config, in_channels):

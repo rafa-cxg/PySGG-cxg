@@ -53,7 +53,7 @@ def to_image_list(tensors, size_divisible=0):
         # input sizs
         if size_divisible > 0:
             import math
-
+            #保证了是32的倍数，同时取h w 在这一batch的最大值作为标准hw,再padding
             stride = size_divisible
             max_size = list(max_size)
             max_size[1] = int(math.ceil(max_size[1] / stride) * stride)

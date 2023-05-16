@@ -87,7 +87,7 @@ MODEL:
   KEYPOINT_ON: false
   MASK_ON: false
   META_ARCHITECTURE: GeneralizedRCNN
-  PRETRAINED_DETECTOR_CKPT: checkpoints/predcls-BGNNPredictor/(2021-07-16_08)BGNN-3-3-learnable_scaling(resampling)/predcls-BGNNPredictor/only_1stage/model_0008400.pth
+  PRETRAINED_DETECTOR_CKPT: checkpoints/detection/pretrained_faster_rcnn/vg_faster_det.pth
 #  PRETRAINED_DETECTOR_CKPT: checkpoints/predcls-BGNNPredictor/2st_dist_cos/model_0018000.pth /0  checkpoints/predcls-BGNNPredictor/2st_dist_cos_unionobjfution_matrix/model_0000800.pth
   RELATION_ON: true
   RESNETS:
@@ -453,7 +453,7 @@ MODEL:
       KEY_DIM: 64
       NUM_HEAD: 8
       OBJ_LAYER: 4
-      REL_LAYER: 2
+      REL_LAYER: 1
       VAL_DIM: 64
     USE_BINARY_LOSS: false
     USE_GT_BOX: true
@@ -520,7 +520,7 @@ SOLVER:
     COOLDOWN: 0
     FACTOR: 0.8
     MAX_DECAY_STEP: 400
-    PATIENCE: 6
+    PATIENCE: 4
     THRESHOLD: 0.001
     TYPE: WarmupReduceLROnPlateau
   STEPS:

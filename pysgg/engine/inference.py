@@ -3,6 +3,10 @@ import logging
 import os
 
 import torch
+
+
+from thop import profile
+
 from tqdm import tqdm
 
 from pysgg.config import cfg
@@ -31,7 +35,9 @@ def compute_on_dataset(model, data_loader, device, synchronize_gather=True, time
     for _, batch in enumerate(tqdm(data_loader)):#这就是总数2500的地方
         # torch.cuda.empty_cache()
         with torch.no_grad():
+
             images, targets, image_ids,image_paths = batch
+
             targets[0].add_field('image_paths', image_paths)
             targets = [target.to(device) for target in targets]
             if timer:
@@ -42,6 +48,15 @@ def compute_on_dataset(model, data_loader, device, synchronize_gather=True, time
                 # relation detection needs the targets
                 #todo 为什么proposal上限80？
                 output = model(images.to(device), targets, logger=logger)#targets:BOXLIST #OUTPUT也是boxlist,但它的extra_fild和target relation_pair不同。rel上限4096
+                # ---------------------------------------------
+                # 计算FLOPs
+                model.eval()
+
+                total_ops, total_params =profile(model, inputs=(images.tensors.to(device), ),report_missing=True)
+                print(
+                    "%s | %.2f | %.2f" % ("cxg", total_params / (1000 ** 2), total_ops / (1000 ** 3))
+                )
+
                 #following only exist when mode = predcls
                 # for op in output:
                     # op.del_field('two_stage_pred_rel_logits')

@@ -90,7 +90,7 @@ class RelationFeatureExtractor(nn.Module):
         self.visual_language_merger_edge = make_visual_language_merger_edge(
             cfg) if cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_EDGE else None  # language和visual融合
     def forward(self, x, proposals, targets,rel_pair_idxs=None,visualize_feature=False):
-
+        visualize_feature=True
         device = x[0].device
         union_proposals = []
         rect_inputs = []

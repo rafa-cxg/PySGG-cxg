@@ -890,6 +890,7 @@ _C.TEST.ALLOW_LOAD_FROM_CACHE = False
 _C.TEST.CUSTUM_EVAL = False
 _C.TEST.EVAL_TOPRECALL = False #针对EEM的验证metrics
 _C.TEST.CUSTUM_PATH = '.'
+_C.TEST.PLOT_PREDICATE_DISTRIBUTION= False
 # ---------------------------------------------------------------------------- #
 # Misc options
 # ---------------------------------------------------------------------------- #

@@ -490,8 +490,9 @@ def evaluate_relation_of_one_image(groundtruth, prediction, global_container, ev
         'rel_pair_idxs').long().detach().cpu().numpy()  # sgdet:(#pred_rels, 2) eg(4096,2) .predcls:[num_box!,2]
     local_container['rel_scores'] = prediction.get_field(
         'pred_rel_scores').detach().cpu().numpy()  # (#pred_rels, num_pred_class)
-    local_container['freq_scores'] = prediction.get_field(
-        'freq_logits').detach().cpu().numpy()
+    if cfg.TEST.EVAL_TOPRECALL:
+        local_container['freq_scores'] = prediction.get_field(
+            'freq_logits').detach().cpu().numpy()
     if cfg.MODEL.TWO_STAGE_ON:
         local_container['gt_2stage'] = groundtruth.get_field('2stage_tuple').long().detach().cpu().numpy()  # [23，3]
         local_container['pred_2stage_rel_inds'] = prediction.get_field(

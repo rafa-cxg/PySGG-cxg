@@ -133,7 +133,7 @@ class Checkpointer(object):
         return torch.load(f, map_location=torch.device("cpu"))
 
     def _load_model(self, checkpoint, load_mapping):
-        if checkpoint['iteration']!=45000: #意味着不是从头训练，不要map权重 #todo 消除初始faster rcnn模型的iteration
+        if checkpoint.__contains__('iteration')==True and checkpoint['iteration']!=45000: #意味着不是从头训练，不要map权重 #todo 消除初始faster rcnn模型的iteration
             load_mapping={}
         load_state_dict(self.model, checkpoint.pop("model"), load_mapping, )
 

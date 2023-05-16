@@ -6,6 +6,8 @@ from collections import defaultdict, OrderedDict, Counter
 import pickle
 import math
 import time
+import re
+
 import h5py
 import numpy as np
 import torch
@@ -20,7 +22,7 @@ from pysgg.utils.comm import get_rank, synchronize
 
 from pysgg.data.datasets.bi_lvl_rsmp import resampling_dict_generation, apply_resampling
 
-from SHA_GCL_extra.group_chosen_function import predicate_new_order, predicate_new_order_name
+# from SHA_GCL_extra.group_chosen_function import predicate_new_order, predicate_new_order_name
 BOX_SCALE = 1024  # Scale at which we have the boxes
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
@@ -65,8 +67,8 @@ class VGDataset(torch.utils.data.Dataset):
         """
         # for debug
         if cfg.DEBUG:
-            num_im = 4
-            num_val_im = 4
+            # num_im = 400
+            num_val_im = 10
         #
         # num_im = 20000
         # num_val_im = 1000
@@ -201,6 +203,7 @@ class VGDataset(torch.utils.data.Dataset):
 
         return img, target, index,self.filenames[index]
 
+
     def get_statistics(self):
         fg_matrix, bg_matrix, rel_counter_init = get_VG_statistics(self,
                                                must_overlap=False)#(151, 151, 51),(151, 151),(50)
@@ -248,7 +251,7 @@ class VGDataset(torch.utils.data.Dataset):
         cate_set = []
         counter_name = []
 
-        sorted_cate_list = [i[0] for i in rel_counter_init.most_common()]
+        sorted_cate_list = [i[0] for i in rel_counter.most_common()]
         lt_part_dict = cfg.MODEL.ROI_RELATION_HEAD.LONGTAIL_PART_DICT
         for cate_id in sorted_cate_list:
             if lt_part_dict[cate_id] == 'h':
@@ -262,26 +265,97 @@ class VGDataset(torch.utils.data.Dataset):
             cate_num.append(rel_counter[cate_id])  # dict start from 1
             cate_num_init.append(rel_counter_init[cate_id])  # dict start from 1
 
-        pallte = ['r', 'g', 'b']
-        color = [pallte[idx] for idx in cate_set]
 
 
-        fig, axs_c = plt.subplots(2, 1, figsize=(13, 10), tight_layout=True)
-        fig.set_facecolor((1, 1, 1))
+        # commit by cxg
+        #----------------------------------------------------
+        #加载训练结果（per class）
 
-        axs_c[0].bar(counter_name, cate_num_init, color=color, width=0.6, zorder=0)
-        axs_c[0].grid()
-        plt.sca(axs_c[0])
-        plt.xticks(rotation=-90, )
-
-        axs_c[1].bar(counter_name, cate_num, color=color, width=0.6, zorder=0)
-        axs_c[1].grid()
-        axs_c[1].set_ylim(0, 50000)
-        plt.sca(axs_c[1])
-        plt.xticks(rotation=-90, )
-
-        save_file = os.path.join(cfg.OUTPUT_DIR, f"rel_freq_dist.png")
-        fig.savefig(save_file, dpi=300)
+        # predicate_new_order_name = ['on', 'has', 'wearing', 'of', 'in', 'near', 'behind', 'with', 'holding', 'above',
+        #                             'sitting on', 'wears', 'under', 'riding', 'in front of', 'standing on', 'at',
+        #                             'carrying', 'attached to', 'walking on', 'over', 'for', 'looking at', 'watching',
+        #                             'hanging from', 'laying on', 'eating', 'and', 'belonging to', 'parked on', 'using',
+        #                             'covering', 'between', 'along', 'covered in', 'part of', 'lying on', 'on back of',
+        #                             'to', 'walking in', 'mounted on', 'across', 'against', 'from', 'growing on',
+        #                             'painted on', 'playing', 'made of', 'says', 'flying in']
+        #
+        #
+        #
+        # file1 = open('bgnn_bls_human.txt', 'r')  # ours
+        # file2 = open('bgnn_bls.txt', 'r')# baseline
+        # # file1 = open('bgnn_base_human_sgdet.txt', 'r')  # ours
+        # # file2 = open('bgnn_base_sgdet.txt', 'r')  # baseline
+        # # file1 = open('bgnn_base_tde.txt', 'r')  # ours
+        # # file2 = open('bgnn_base.txt', 'r')  # baseline
+        # data1 = file1.read()
+        # data2 = file2.read()
+        # dict1={}
+        # dict2={}
+        # for num_str in  re.findall('\((.*?)\)',data1):
+        #     name,value=num_str.split(':')
+        #     dict1[name]=float(value)
+        # d1=np.array(list(dict1.values()))
+        # for num_str in  re.findall('\((.*?)\)',data2):
+        #     name,value=num_str.split(':')
+        #     dict2[name]=float(value)
+        # d2=np.array(list(dict2.values()))
+        # d1=d1[list(map(lambda item: item - 1, sorted_cate_list))]
+        # d2=d2[list(map(lambda item: item - 1, sorted_cate_list))]
+        # #-------------------------------------
+        # draw_relative=True
+        # if draw_relative:
+        #     plt.ylabel(u'improvement', fontsize=8)  # 设置y轴，并设定字号大小
+        #     relative=d1-d2
+        #     colors_recall=['darkturquoise' for i in range(0,len(relative))]
+        #     idx=0
+        #     for i1,i2,color in (zip(d1,d2,colors_recall)):
+        #         # if (i1-i2)<-0.0001:
+        #         #     colors_recall[idx]='black'
+        #         if i1<=0.0002 and  i2<=0.0002:
+        #             colors_recall[idx]='w'
+        #         if i2 <= 0.0002 and i1>=0.0002:
+        #             colors_recall[idx] = 'r'
+        #         idx=idx+1
+        # #----------------------------------------------
+        # pallte = ['sandybrown', 'sandybrown', 'sandybrown']
+        # color = [pallte[idx] for idx in cate_set]
+        # fig, axs_c = plt.subplots(1, 1, figsize=(15, 5), tight_layout=True)
+        # fig.set_facecolor((1, 1, 1))
+        #
+        #
+        #
+        # ln1 = axs_c.bar(counter_name, cate_num, color=color, width=0.6, zorder=0,label="nums")
+        # # axs_c.grid()
+        # axs_c.set_ylim(0, 50000)
+        # axs_c.set_ylabel('Samples (#)')
+        # # plt.sca(axs_c)
+        # plt.xticks(rotation=90, )
+        # # axs_c.legend(loc='upper center',frameon=False)
+        #
+        # # --------------------------------------------------
+        # # 画折线
+        # ax2 = axs_c.twinx()
+        # ax2.set_ylabel('R@100 improvement (%)')
+        #
+        # ln2 = ax2.scatter(counter_name, relative, color=colors_recall,label="R@100")
+        # p= np.corrcoef(cate_num,relative)
+        # p = np.corrcoef(cate_num, d1)
+        # p = np.corrcoef(cate_num, d2)
+        # print(p)
+        # # ax2.legend(loc=(0.46,0.94),frameon=False)
+        # plt.axhline(y=0, xmin=0, xmax=1, )
+        # # ax = ln1 + ln2
+        # # labs = [l.get_label() for l in ax]
+        # fig.legend(loc=(0.5,0.85))
+        # ax=plt.gca()
+        # text = plt.text(0.6,0.9,  # 文本y轴坐标
+        #                 s='PCC=-0.32',  # 文本内容
+        #                 transform=ax.transAxes)
+        # # plt.legend(loc='upper center')
+        # # --------------------------------------------------
+        # save_file = os.path.join(cfg.OUTPUT_DIR, f"rel_freq_dist.png")
+        # fig.savefig(save_file, dpi=300)
+        # fig.show()
 
 
         return result

@@ -732,7 +732,10 @@ class RelAwareRelFeature(nn.Module):
                 relness_scores = squeeze_tensor(torch.sigmoid(relness_bin_logits))
                 pred_rel_matrix[pair_idx[:, 0], pair_idx[:, 1]] = relness_scores
 
-                relness_logits = torch.cat((relness_logits, relness_bin_logits), dim=1)#torch.Size([110, 51])
+                try:
+                    relness_logits = torch.cat((relness_logits, relness_bin_logits), dim=1)#torch.Size([110, 51])
+                except:
+                    relness_logits = torch.cat((relness_logits.unsqueeze(0), relness_bin_logits.unsqueeze(0)), dim=1)#防止relation总数为1，缺一个维度
             elif self.predictor_type == "single":
                 relness_scores = squeeze_tensor(torch.sigmoid(relness_logits))
                 pred_rel_matrix[pair_idx[:, 0], pair_idx[:, 1]] = relness_scores.max(dim=1)[0]

@@ -1045,11 +1045,14 @@ class bgnn_causal_Context(nn.Module):
         self.average_ratio = 0.0005
         self.effect_analysis = cfg.MODEL.ROI_RELATION_HEAD.CAUSAL.EFFECT_ANALYSIS
         self.obj_dim = in_channels
+        self.edge_dim=in_channels
+        if cfg.MODEL.ROI_RELATION_HEAD.VISUAL_LANGUAGE_MERGER_OBJ==True:
+            self.obj_dim+=512
         self.embed_dim = self.cfg.MODEL.ROI_RELATION_HEAD.EMBED_DIM
         self.hidden_dim = self.cfg.MODEL.ROI_RELATION_HEAD.CONTEXT_HIDDEN_DIM
         if self.effect_analysis:
             self.register_buffer("untreated_obj_feat", torch.zeros(self.obj_dim))
-            self.register_buffer("untreated_edg_feat", torch.zeros(self.obj_dim))
+            self.register_buffer("untreated_edg_feat", torch.zeros(self.edge_dim))
     def set_pretrain_pre_clser_mode(self, val=True):
         self.context.pretrain_pre_clser_mode = val
 

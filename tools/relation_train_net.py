@@ -41,6 +41,12 @@ from pysgg.data.build import compute_features
 import torch.distributed as dist
 from pysgg.utils.comm import all_gather
 
+# from torchinfo  import summary
+
+# from torchviz import make_dot
+
+# from tensorboardX import SummaryWriter
+
 # from clustering import  clustering
 from pysgg.utils.comm import is_main_process
 # See if we can use apex.DistributedDataParallel instead of the torch default,
@@ -106,6 +112,8 @@ def train(
     output_dir = cfg.OUTPUT_DIR
     debug_print(logger, "prepare training")
     model = build_detection_model(cfg)
+
+
     model.train()
     debug_print(logger, "end model construction")
     logger.info(str(model))
@@ -267,7 +275,9 @@ def train(
     print("load model to GPU")
     device = torch.device(cfg.MODEL.DEVICE)
     model.to(device)
-
+    # model.eval()
+    # model_stats = summary(model, (1, 3, 224, 224), row_settings=["depth"],verbose=2)
+    # print(model_stats)
     num_gpus = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
     num_batch = cfg.SOLVER.IMS_PER_BATCH #12
     optimizer = make_optimizer(
@@ -312,7 +322,6 @@ def train(
 
     checkpoint_period = cfg.SOLVER.CHECKPOINT_PERIOD
     debug_print(logger, "end load checkpointer")
-
     if cfg.MODEL.ROI_RELATION_HEAD.RE_INITIALIZE_CLASSIFIER:
         model.roi_heads.relation.predictor.init_classifier_weight()
 
@@ -382,6 +391,7 @@ def train(
     start_training_time = time.time()
     end = time.time()
     model.train()
+
     print_first_grad = True
     if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_BOX:
         if cfg.MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL:
@@ -426,7 +436,13 @@ def train(
         fix_eval_modules(eval_modules)
         images = images.to(device)
         targets = [target.to(device) for target in targets]
+
         loss_dict = model(images, targets, logger=logger) #predcls:dict:4
+
+
+        # #网络图
+        # g = make_dot(model.module.backbone(images, targets))
+        # g.render('landmark', view=True)
         synchronize()
 
         #

@@ -3,6 +3,7 @@ import bisect
 import copy
 import json
 import logging
+import multiprocessing
 import os
 import pickle
 from collections import Counter
@@ -31,11 +32,11 @@ from pysgg.utils.util_from_deepcluster import AverageMeter
 
 from  multiprocessing import  Pool
 from scipy.stats import wasserstein_distance
-from sklearn_extra.cluster import KMedoids
+# from sklearn_extra.cluster import KMedoids
 #by cxg
 def compute_Wasserstein_distance(attr_prob,outfile=None):
-    # MAX_PROCESS=multiprocessing.cpu_count()
-    MAX_PROCESS=40
+    MAX_PROCESS=multiprocessing.cpu_count()
+    # MAX_PROCESS=40
     cls_num = attr_prob.shape[0]
     similarity = np.zeros((cls_num, cls_num))
     group_attr_prob=np.array_split(attr_prob, MAX_PROCESS)
@@ -85,7 +86,7 @@ def norm_distribution(prob, num=150,dim=1):
     prob_weight = prob_weight / np.repeat(sum_value, prob_weight.shape[dim], axis=dim)
     prob_weight[0,:]=0#避免nan
     return prob_weight
-def plot_distribution_bar(rel_array,data,is_sub,object=False): #input should be an np array
+def plot_distribution_bar(rel_array,data,command): #input should be an np array
     stastic_photo_dir='clustering/stastic_photo_dir/'
     CHECK_FOLDER = os.path.isdir(stastic_photo_dir)
     if not CHECK_FOLDER:
@@ -95,30 +96,58 @@ def plot_distribution_bar(rel_array,data,is_sub,object=False): #input should be 
     else:
         print(stastic_photo_dir, "folder already exists.")
 
-    for predicates in range(rel_array.shape[0]) :
+    if command == 'pair':
+        #2771:lady
+        # get zeroshot triplet
+        # 展示zeroshot所有的triblet名称[(data.ind_to_classes[tri[0]] + '-' + data.ind_to_predicates[tri[2]] + '-' + data.ind_to_classes[tri[1]]) for tri in zeroshot_triplet]
+        zeroshot_triplet = torch.load("pysgg/data/datasets/evaluation/vg/zeroshot_triplet.pytorch",
+                                      map_location=torch.device("cpu")).long().numpy()
+        if cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT_FACTOR != 0:
+            show_triplet=zeroshot_triplet[3300:3330]
+            bias = torch.zeros((show_triplet.shape[0], 51)).scatter_(-1,
+                                                                                torch.tensor(show_triplet)[:,
+                                                                                2].unsqueeze(-1), (
+                                                                                            1 - cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT_FACTOR))
 
-        objects = (rel_array[predicates,:])#(151)
-        xs = np.arange(len(objects))
-        fig = plt.figure(figsize=(10, 5),dpi=200)
-        plt.bar(xs, objects, color='maroon',width=0.4)
-        # plt.xticks(xs, labels)  # Replace default x-ticks with xs, then replace xs with labels
-        # plt.yticks(ys)
-        if object==False:#代表统计的是predicate
-            label = data.ind_to_predicates[predicates]
-        else:
-            if is_sub:
+        for i, tri in enumerate(show_triplet):
+            fig = plt.figure(figsize=(10, 5), dpi=200)
+            objects = rel_array[tri[0],tri[1]][1:] * cfg.MODEL.TWO_STAGE_HEAD.DYNAMIC_GT_FACTOR
+            objects= objects +bias[i,1:].numpy()
+            xs = np.arange(len(objects))
+            plt.bar(xs, objects, color='maroon', width=0.4)
+            label = data.ind_to_classes[tri[0]] + '-' + data.ind_to_predicates[tri[2]] + '-' + data.ind_to_classes[
+                tri[1]]
+            plt.title(label)
+            plt.ylabel('likelihood')
+            # 获得所有x坐标标签
+            xlabels = [data.ind_to_predicates[i+1] for i in np.arange(rel_array.shape[2]-1)]
+            plt.xticks(xs, xlabels, rotation=45, ha='right', rotation_mode='anchor', fontsize=6)
+            # plt.show()
+            plt.savefig(stastic_photo_dir + str(label) + '.pdf')
+
+    else:
+        for predicates in range(rel_array.shape[0]) :
+            fig = plt.figure(figsize=(10, 5), dpi=200)
+            objects = (rel_array[predicates,:])#(151)
+            xs = np.arange(len(objects))
+            plt.bar(xs, objects, color='maroon',width=0.4)
+
+
+
+            if command=='sub':
                 label = data.ind_to_classes[predicates] + '(sub)'
-            else:
+            if command == 'obj':
                 label = data.ind_to_classes[predicates]+ '(obj)'
 
-        # plt.xlabel(label)
-        plt.title(label)
-        plt.ylabel('ratio')
-        #获得所有x坐标标签
-        xlabels= [data.ind_to_predicates[i] for i in np.arange(rel_array.shape[1])]
-        plt.xticks(xs, xlabels, rotation=45, ha='right', rotation_mode='anchor',fontsize=6)
-        # plt.show()
-        plt.savefig(stastic_photo_dir+str(label)+'.png')
+
+            # plt.xlabel(label)
+            plt.title(label)
+            plt.ylabel('ratio')
+            #获得所有x坐标标签
+            xlabels= [data.ind_to_predicates[i] for i in np.arange(rel_array.shape[1])]
+            plt.xticks(xs, xlabels, rotation=45, ha='right', rotation_mode='anchor',fontsize=6)
+            # plt.show()
+            plt.savefig(stastic_photo_dir+str(label)+'.png')
 
 
 def map_predicate2cluster(data,cluster_array):
@@ -213,7 +242,7 @@ def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=Fa
         train_data ([type]): [description]
         dataset_name ([type]): [description]
     """
-    # 
+    #
     if is_main_process():
         print("Get relation class frequency distribution on dataset.")
         pred_counter = Counter()
@@ -226,7 +255,6 @@ def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=Fa
         f1 = pool.map(
             partial(multi_process_stastics, train_data=train_data,rel_obj_distribution=rel_obj_distribution, sub_rel_distribution=sub_rel_distribution,obj_rel_distribution=obj_rel_distribution, pred_counter=pred_counter),
             split_data)
-
         pool.close()
         pool.join()
         '''把多进程内容融合'''
@@ -238,10 +266,23 @@ def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=Fa
             sub_rel_distribution+=part[1]
             obj_rel_distribution += part[2]
             pred_counter+=part[3]
+        # triblet_distribution=[]
+        # for i in sub_rel_distribution:
+        #     for j in obj_rel_distribution:
+        #         triblet_distribution.append(np.asarray(i*j))
+        # triblet_distribution=np.asarray(triblet_distribution).reshape(151, 151, -1)
+        #
+        #
+        # plot_distribution_bar(triblet_distribution / (
+        #             np.repeat(np.sum(triblet_distribution, -1, keepdims=True), triblet_distribution.shape[-1],
+        #                       -1) + 1e-6),
+        #                       train_data, command='pair')
+
         #归一化
         sub_rel_distribution=norm_distribution(sub_rel_distribution)
         obj_rel_distribution =norm_distribution(obj_rel_distribution)
         rel_obj_distribution = norm_distribution(rel_obj_distribution)
+
         with open(os.path.join(cfg.OUTPUT_DIR, "pred_counter.pkl"), 'wb') as f:
             pickle.dump(pred_counter, f)
         if record_rel_distribution:
@@ -249,16 +290,17 @@ def get_dataset_distribution(train_data, dataset_name,record_rel_distribution=Fa
                 pickle.dump(rel_obj_distribution, f)
             '''转换成np array'''
             rel_obj_distribution = rel_obj_distribution.numpy()
-            # rel_obj_distribution = np.array(rel_obj_distribution)  # (51,151)
-            # plot_distribution_bar(rel_obj_distribution,train_data)
+
         '''sub'''
         with open(os.path.join(cfg.OUTPUT_DIR, "record_sub_distribution.pkl"), 'wb') as f:
             pickle.dump(sub_rel_distribution, f)
-        plot_distribution_bar(sub_rel_distribution, train_data,is_sub=True,object=True)
+        plot_distribution_bar(sub_rel_distribution, train_data,command='sub')
         '''obj'''
         with open(os.path.join(cfg.OUTPUT_DIR, "record_obj_distribution.pkl"), 'wb') as f:
             pickle.dump(obj_rel_distribution, f)
-        plot_distribution_bar(obj_rel_distribution, train_data, is_sub=False,object=True)
+        plot_distribution_bar(obj_rel_distribution, train_data, command='obj')
+
+
 
         if clustering:
             # rel_obj_distribution_norm=norm_distribution(rel_obj_distribution[1:,1:])
